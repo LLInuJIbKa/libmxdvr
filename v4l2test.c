@@ -24,7 +24,7 @@ int main(int argc, char **argv)
 		buffer = v4l2dev_read(device);
 		if(!buffer) fprintf(stderr, "NULL\n");
 
-		fwrite(buffer, buffersize/2*1.5, 1, fp);
+		fwrite(buffer, buffersize, 1, fp);
 	}
 	fclose(fp);
 	v4l2dev_close(&device);

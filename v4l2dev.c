@@ -14,7 +14,6 @@
 #include "v4l2dev.h"
 
 
-
 /**
  * @brief Handle object of V4L2 devices
  * @details You should <b>NOT</b> access this data structure directly.
@@ -36,8 +35,10 @@ struct v4l2dev
 	/** @brief Output buffer for user reading */
 	unsigned char*	buffer;
 
+	/** @brief Current width */
 	int width;
 
+	/** @brief Current height */
 	int height;
 };
 
@@ -47,7 +48,6 @@ static void convert_yuv422_to_yuv420(unsigned char *InBuff, unsigned char *OutBu
 	int i = 0, j = 0, k = 0;
 	int UOffset = width * height;
 	int VOffset = (width * height) * 5 / 4;
-	//int UVSize = (width * height) / 4;
 	int line1 = 0, line2 = 0;
 	int m = 0, n = 0;
 	int y = 0, u = 0, v = 0;
@@ -96,7 +96,6 @@ static int is_valid_v4l2dev(v4l2dev device)
 	if(!device->mmap_buffers) return 0;
 	return 1;
 }
-
 
 /**
  * @brief Open a V4L2 device and return a handle object.
@@ -158,12 +157,15 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 		fprintf(stderr, "Unsupported pixel format!\n");
 	}
 
+
+	/* Get real pixel format */
+
 	ioctl(device->fd, VIDIOC_G_FMT, &fmt);
 	device->width	= fmt.fmt.pix.width;
 	device->height	= fmt.fmt.pix.height;
 
-	memset(&req, 0, sizeof(struct v4l2_requestbuffers));
 
+	memset(&req, 0, sizeof(struct v4l2_requestbuffers));
 	req.count               = n_buffers;
 	req.type                = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	req.memory              = V4L2_MEMORY_MMAP;
@@ -206,7 +208,6 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 
 }
 
-
 /**
  * @brief Get output buffer size.
  * @details Call this function after v4l2dev_init() to get the output buffer size, because the resolution you specified may not match to any one that the device supports.
@@ -214,10 +215,8 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 size_t v4l2dev_get_buffersize(v4l2dev device)
 {
 	if(!is_valid_v4l2dev(device)) return 0;
-	return device->buffer_size;
+	return device->buffer_size*3/4;
 }
-
-
 
 /**
  * @brief Close a V4L2 device and free all resource.
