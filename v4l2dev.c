@@ -1,6 +1,6 @@
 /**
  * @file v4l2dev.c
- * @author Ruei-Yuan Lu
+ * @author Ruei-Yuan Lu (ryuan_lu@iii.org.tw)
  */
 
 #include <stdlib.h>
@@ -13,6 +13,9 @@
 #include <sys/mman.h>
 #include "v4l2dev.h"
 
+#ifndef	SOFTWARE_YUV422_TO_YUV420
+#include "mxc_ipu.h"
+#endif
 
 /**
  * @brief Handle object of V4L2 devices
@@ -42,7 +45,7 @@ struct v4l2dev
 	int height;
 };
 
-
+#ifdef SOFTWARE_YUV422_TO_YUV420
 static void convert_yuv422_to_yuv420(unsigned char *InBuff, unsigned char *OutBuff, int width, int height)
 {
 	int i = 0, j = 0, k = 0;
@@ -87,6 +90,7 @@ static void convert_yuv422_to_yuv420(unsigned char *InBuff, unsigned char *OutBu
 		}
 	}
 }
+#endif
 
 static int is_valid_v4l2dev(v4l2dev device)
 {
@@ -206,6 +210,11 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	ioctl(device->fd, VIDIOC_STREAMON, &type);
 
+#ifndef SOFTWARE_YUV422_TO_YUV420
+
+	/* Setup hardware accelerated YUYV to I420 conversion and IPU display */
+	ipu_init(device->width, device->height, IPU_PIX_FMT_YUYV, device->width, device->height, IPU_PIX_FMT_YUV420P, 0);
+#endif
 }
 
 /**
@@ -247,6 +256,9 @@ void v4l2dev_close(v4l2dev* device)
 		}
 	}
 
+#ifndef SOFTWARE_YUV422_TO_YUV420
+	ipu_uninit();
+#endif
 
 	/* Free memory */
 
@@ -310,8 +322,11 @@ const unsigned char* v4l2dev_read(v4l2dev device)
 		}
 
 		result = ioctl(device->fd, VIDIOC_QBUF, &buf);
+#ifdef	SOFTWARE_YUV422_TO_YUV420
 		convert_yuv422_to_yuv420(device->mmap_buffers[buf.index], device->buffer, device->width, device->height);
-
+#else
+		ipu_buffer_update(device->mmap_buffers[buf.index], device->buffer);
+#endif
 		return device->buffer;
 	}
 	return NULL;
