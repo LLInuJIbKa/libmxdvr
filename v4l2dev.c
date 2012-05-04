@@ -13,6 +13,7 @@
 #include <sys/mman.h>
 #include "v4l2dev.h"
 
+#define SOFTWARE_YUV422_TO_YUV420
 #ifndef	SOFTWARE_YUV422_TO_YUV420
 #include "mxc_ipu.h"
 #endif
@@ -43,6 +44,9 @@ struct v4l2dev
 
 	/** @brief Current height */
 	int height;
+#ifndef	SOFTWARE_YUV422_TO_YUV420
+	ipu_lib_handle_t* ipu_handle;
+#endif
 };
 
 #ifdef SOFTWARE_YUV422_TO_YUV420
@@ -213,7 +217,7 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 #ifndef SOFTWARE_YUV422_TO_YUV420
 
 	/* Setup hardware accelerated YUYV to I420 conversion and IPU display */
-	ipu_init(device->width, device->height, IPU_PIX_FMT_YUYV, device->width, device->height, IPU_PIX_FMT_YUV420P, 0);
+	device->ipu_handle = ipu_init(device->width, device->height, IPU_PIX_FMT_YUYV, device->width, device->height, IPU_PIX_FMT_YUV420P, 0);
 #endif
 }
 
@@ -257,7 +261,7 @@ void v4l2dev_close(v4l2dev* device)
 	}
 
 #ifndef SOFTWARE_YUV422_TO_YUV420
-	ipu_uninit();
+	ipu_uninit(&(ptr->ipu_handle));
 #endif
 
 	/* Free memory */
@@ -325,7 +329,7 @@ const unsigned char* v4l2dev_read(v4l2dev device)
 #ifdef	SOFTWARE_YUV422_TO_YUV420
 		convert_yuv422_to_yuv420(device->mmap_buffers[buf.index], device->buffer, device->width, device->height);
 #else
-		ipu_buffer_update(device->mmap_buffers[buf.index], device->buffer);
+		ipu_buffer_update(device->ipu_handle, device->mmap_buffers[buf.index], device->buffer);
 #endif
 		return device->buffer;
 	}

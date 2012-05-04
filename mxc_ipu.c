@@ -8,7 +8,6 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <memory.h>
-#include "mxc_ipu_hl_lib.h"
 
 #include "mxc_ipu.h"
 
@@ -21,7 +20,7 @@ static int next_update_index = 0;
 
 static void ipu_output_callback(void* output, int index)
 {
-	memcpy(output, global_ipu_handle->outbuf_start[index], global_ipu_handle->ofr_size);
+	if(output) memcpy(output, global_ipu_handle->outbuf_start[index], global_ipu_handle->ofr_size);
 }
 
 
@@ -67,15 +66,13 @@ int ipu_query_task(void)
  * @param out_fmt Pixel format of the output image
  * @param show Render output image to framebuffer
  */
-int ipu_init(int in_w, int in_h, int in_fmt, int out_w, int out_h, int out_fmt, int show)
+ipu_lib_handle_t* ipu_init(int in_w, int in_h, int in_fmt, int out_w, int out_h, int out_fmt, int show)
 {
+	ipu_lib_handle_t* ipu_handle = NULL;
 	ipu_lib_input_param_t input;
 	ipu_lib_output_param_t output;
 
-	if(global_ipu_handle)
-		ipu_uninit();
-
-	global_ipu_handle = calloc(1, sizeof(ipu_lib_handle_t));
+	ipu_handle = calloc(1, sizeof(ipu_lib_handle_t));
 	memset(&input, 0, sizeof(ipu_lib_input_param_t));
 	memset(&output, 0, sizeof(ipu_lib_output_param_t));
 
@@ -88,20 +85,27 @@ int ipu_init(int in_w, int in_h, int in_fmt, int out_w, int out_h, int out_fmt, 
 	output.fmt = out_fmt;
 	output.show_to_fb = show;
 
-	return mxc_ipu_lib_task_init(&input, NULL, &output, OP_NORMAL_MODE, global_ipu_handle);
+	output.output_win.pos.x = 0;
+	output.output_win.pos.y = 0;
+	output.output_win.win_w = out_w;
+	output.output_win.win_h = out_h;
+
+	mxc_ipu_lib_task_init(&input, NULL, &output, OP_NORMAL_MODE|TASK_VF_MODE, ipu_handle);
+
+	return ipu_handle;
 }
 
 /**
  * @brief Uninitialize IPU
  */
-void ipu_uninit(void)
+void ipu_uninit(ipu_lib_handle_t** ipu_handle)
 {
-	if(!global_ipu_handle)
+	if(!*ipu_handle)
 		return;
 
-	mxc_ipu_lib_task_uninit(global_ipu_handle);
-	free(global_ipu_handle);
-	global_ipu_handle = NULL;
+	mxc_ipu_lib_task_uninit(*ipu_handle);
+	free(*ipu_handle);
+	*ipu_handle = NULL;
 }
 
 /**
@@ -110,9 +114,10 @@ void ipu_uninit(void)
  * @param input_data Pointer to the input image
  * @param output_data Pointer to the output image
  */
-void ipu_buffer_update(const unsigned char* input_data, unsigned char* output_data)
+void ipu_buffer_update(ipu_lib_handle_t* ipu_handle, const unsigned char* input_data, unsigned char* output_data)
 {
-	memcpy(global_ipu_handle->inbuf_start[next_update_index], input_data, global_ipu_handle->ifr_size);
-	next_update_index = mxc_ipu_lib_task_buf_update(global_ipu_handle, 0, 0, 0, ipu_output_callback, output_data);
+	global_ipu_handle= ipu_handle;
+	memcpy(ipu_handle->inbuf_start[next_update_index], input_data, ipu_handle->ifr_size);
+	next_update_index = mxc_ipu_lib_task_buf_update(ipu_handle, 0, 0, 0, ipu_output_callback, output_data);
 }
 
