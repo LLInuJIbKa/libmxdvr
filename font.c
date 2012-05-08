@@ -51,7 +51,6 @@ text_layout text_layout_create(const int width, const int height)
 void text_layout_destroy(text_layout layout)
 {
 	if(!layout) return;
-	if(layout->layout)	g_object_unref(layout);
 	if(layout->cairo)	cairo_destroy(layout->cairo);
 	if(layout->surface)	cairo_surface_destroy(layout->surface);
 
@@ -123,6 +122,5 @@ void text_layout_copy_to_yuv420p(const text_layout layout, const int x, const in
 			if(source[j]) destination[j] = source[j];
 		}
 	}
-
 }
 
