@@ -54,7 +54,7 @@ static void convert_yuv422_to_yuv420(unsigned char *InBuff, unsigned char *OutBu
 {
 	int i = 0, j = 0, k = 0;
 	int UOffset = width * height;
-	int VOffset = (width * height) * 5 / 4;
+	int VOffset = (width * height) * 5 >> 2;
 	int line1 = 0, line2 = 0;
 	int m = 0, n = 0;
 	int y = 0, u = 0, v = 0;
@@ -63,8 +63,8 @@ static void convert_yuv422_to_yuv420(unsigned char *InBuff, unsigned char *OutBu
 	for (i = 0, j = 1; i < height; i += 2, j += 2)
 	{
 		/* Input Buffer Pointer Indexes */
-		line1 = i * width * 2;
-		line2 = j * width * 2;
+		line1 = i * width << 1;
+		line2 = j * width << 1;
 		/* Output Buffer Pointer Indexes */
 		m = width * y;
 		y = y + 1;
@@ -89,8 +89,8 @@ static void convert_yuv422_to_yuv420(unsigned char *InBuff, unsigned char *OutBu
 			OutBuff[m++] = Y2;
 			OutBuff[n++] = Y3;
 			OutBuff[n++] = Y4;
-			OutBuff[u++] = (U + U2) / 2;
-			OutBuff[v++] = (V + V2) / 2;
+			OutBuff[u++] = (U + U2) >> 1;
+			OutBuff[v++] = (V + V2) >> 1;
 		}
 	}
 }
@@ -278,7 +278,7 @@ void v4l2dev_close(v4l2dev* device)
  * @param device Target V4L2 device
  * @return Pointer to the memory mapped RAW buffer
  */
-const unsigned char* v4l2dev_read(v4l2dev device)
+unsigned char* v4l2dev_read(v4l2dev device)
 {
 	fd_set fds;
 	struct timeval tv;
