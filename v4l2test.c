@@ -56,7 +56,7 @@ int main(int argc, char **argv)
 		{
 			time(&rawtime);
 			timeinfo = localtime(&rawtime);
-			strftime(timestring, 255, "%p %l:%m:%S %Y/%m/%d", timeinfo);
+			strftime(timestring, 255, "%p %l:%M:%S %Y/%m/%d", timeinfo);
 			text_layout_render_markup_text(text, timestring);
 		}
 
