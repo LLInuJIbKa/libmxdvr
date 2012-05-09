@@ -1,6 +1,6 @@
 /**
  * @file mxc_ipu.c
- * @author Ruei-Yuan Lu (ryuan_lu@iii.org.tw)
+ * @author Ruei-Yuan Lu (RueiYuan.Lu@gmail.com)
  */
 
 #include <stdio.h>

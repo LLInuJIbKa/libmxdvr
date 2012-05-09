@@ -1,6 +1,6 @@
 /**
  * @file font.c
- * @author Ruei-Yuan Lu (ryuan_lu@iii.org.tw)
+ * @author Ruei-Yuan Lu (RueiYuan.Lu@gmail.com)
  */
 #include <stdlib.h>
 #include <memory.h>
@@ -105,21 +105,30 @@ void text_layout_render_markup_text(text_layout layout, const char* markup_text)
 void text_layout_copy_to_yuv420p(const text_layout layout, const int x, const int y, unsigned char* image, const int img_w, const int img_h)
 {
 	int i,j;
-	unsigned char* source;
-	unsigned char* destination;
+	unsigned char* src;
+	unsigned char* destY;
+	unsigned char* destU;
+	unsigned char* destV;
 
 	if(!layout||!layout->surface_data) return;
 
 	for(i = 0; i < layout->height; ++i)
 	{
-		source = &(layout->surface_data[layout->width * i]);
+		src = &(layout->surface_data[layout->width * i]);
+		destY = &(image[img_w * (y + i) + x]);
+		destU = &(image[img_w * img_h + img_w / 2 * (y / 2 + i / 2) + x / 2]);
+		destV = &(image[img_w * img_h * 5 / 4 + img_w / 2 * (y / 2 + i / 2) + x / 2]);
 
-		/* Write Y */
-		destination = &(image[img_w * (y + i) + x]);
+
 		for(j = 0; j < layout->width; ++j)
 		{
 			if(x + j >= img_w) break;
-			if(source[j]) destination[j] = source[j];
+			if(src[j])
+			{
+				destY[j] = src[j];
+				destU[j / 2] = -128;
+				destV[j / 2] = -128;
+			}
 		}
 	}
 }
