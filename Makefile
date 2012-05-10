@@ -1,7 +1,7 @@
 CC=/opt/toolchain/bin/arm-none-linux-gnueabi-gcc 
 ROOTFS:=/media/SmartHome_SD
 TARGET_SHARED_OBJECT:=libmxdvr.so 
-SOURCE_FILES:=v4l2dev.c mxc_ipu.c platform.c font.c
+SOURCE_FILES:=v4l2dev.c mxc_ipu.c mxc_vpu.c platform.c font.c
 OBJECTS:=$(subst .c,.o, $(SOURCE_FILES))
 
 
@@ -12,7 +12,7 @@ INCLUDE_DIRS=\
 -I$(ROOTFS)/usr/include/glib-2.0 \
 -I$(ROOTFS)/usr/lib/glib-2.0/include
 
-LINK_LIBRARIES=-lipu $(shell pkg-config --libs pangocairo)
+LINK_LIBRARIES=-lipu -lvpu $(shell pkg-config --libs pangocairo)
 
 CFLAGS:=-pipe -O3 -fPIC -Wall -march=armv6 $(INCLUDE_DIRS)
 LDFLAGS:=-Wall -L$(ROOTFS)/usr/lib $(LINK_LIBRARIES) --sysroot=$(ROOTFS) 
@@ -25,13 +25,13 @@ clean:
 
 %.o: %.c
 	@echo "  CC	$@"
-	@$(CC) -c $< -o $@ $(CFLAGS)
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 $(TARGET_SHARED_OBJECT): $(OBJECTS)
 	@echo "  LD	$@"
-	@$(CC) $^ -o $@ -shared $(LDFLAGS)
+	@$(CC) -shared $(LDFLAGS) $^ -o $@
 
-v4l2test: v4l2test.o $(TARGET_SHARED_OBJECT)
+v4l2test: v4l2test.o $(OBJECTS)
 	@echo "  LD	$@"
-	@$(CC) $^ -o $@ -L./ -lmxdvr $(LDFLAGS)
+	@$(CC) -L./ $(LDFLAGS) -lmxdvr $^ -o $@
 

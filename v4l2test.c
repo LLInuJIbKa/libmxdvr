@@ -4,6 +4,7 @@
 #include "platform.h"
 #include "v4l2dev.h"
 #include "mxc_ipu.h"
+#include "mxc_vpu.h"
 #include "font.h"
 
 #define DEVICE_NODE	"/dev/video0"
@@ -41,6 +42,9 @@ int main(int argc, char **argv)
 	ipu_handle = ipu_init(CAPTURE_WIDTH, CAPTURE_HEIGHT, IPU_PIX_FMT_YUV420P, DISPLAY_WIDTH, DISPLAY_HEIGHT, IPU_PIX_FMT_RGB565, 1);
 	ipu_query_task();
 
+//	vpu_init();
+//	vpu_UnInit();
+
 	text = text_layout_create(280, 30);
 	text_layout_set_font(text, "Liberation Mono", 24);
 
@@ -49,6 +53,7 @@ int main(int argc, char **argv)
 	for(i = 0;; ++i)
 	{
 		buffer = v4l2dev_read(device);
+		if(!buffer) continue;
 
 		/* Update text image every second */
 
@@ -62,7 +67,6 @@ int main(int argc, char **argv)
 
 		text_layout_copy_to_yuv420p(text, 360, 400, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
 		ipu_buffer_update(ipu_handle, buffer, rgb_buffer);
-
 
 		/* Detect ENTER key */
 
