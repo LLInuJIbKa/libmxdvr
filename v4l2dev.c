@@ -322,7 +322,7 @@ unsigned char* v4l2dev_read(v4l2dev device)
 			{
 				fprintf(stderr, "Waiting...\n");
 				continue;
-			}
+			}else return NULL;
 		}
 
 		result = ioctl(device->fd, VIDIOC_QBUF, &buf);
