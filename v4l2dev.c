@@ -1,8 +1,3 @@
-/**
- * @file v4l2dev.c
- * @author Ruei-Yuan Lu (RueiYuan.Lu@gmail.com)
- */
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <memory.h>
@@ -12,11 +7,10 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include "v4l2dev.h"
-
-#define SOFTWARE_YUV422_TO_YUV420
 #ifndef	SOFTWARE_YUV422_TO_YUV420
 #include "mxc_ipu.h"
 #endif
+
 
 /**
  * @brief Handle object of V4L2 devices
@@ -44,11 +38,16 @@ struct v4l2dev
 
 	/** @brief Current height */
 	int height;
+
+#ifndef USE_YUV422_OUTPUT
 #ifndef	SOFTWARE_YUV422_TO_YUV420
+	/** @brief IPU handle from libipu */
 	ipu_lib_handle_t* ipu_handle;
+#endif
 #endif
 };
 
+#ifndef USE_YUV422_OUTPUT
 #ifdef SOFTWARE_YUV422_TO_YUV420
 static void convert_yuv422_to_yuv420(unsigned char *InBuff, unsigned char *OutBuff, int width, int height)
 {
@@ -95,6 +94,7 @@ static void convert_yuv422_to_yuv420(unsigned char *InBuff, unsigned char *OutBu
 	}
 }
 #endif
+#endif
 
 static int is_valid_v4l2dev(v4l2dev device)
 {
@@ -105,10 +105,6 @@ static int is_valid_v4l2dev(v4l2dev device)
 	return 1;
 }
 
-/**
- * @brief Open a V4L2 device and return a handle object.
- * @param device_node File path to the device node.
- */
 v4l2dev v4l2dev_open(const char* device_node)
 {
 	v4l2dev device = NULL;
@@ -126,14 +122,6 @@ v4l2dev v4l2dev_open(const char* device_node)
 	return device;
 }
 
-/**
- * @brief Initialize the v4l2dev object and start capturing.
- * @details This function will set the device into specified capture mode, and map buffers to userspace memory. If all things were done, start capturing.
- * @param device Opened v4l2dev object.
- * @param width
- * @param height
- * @param n_buffers Number of buffers.
- */
 void v4l2dev_init(v4l2dev device, const int width, const int height, const int n_buffers)
 {
 	int input_index = 0;
@@ -221,19 +209,6 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 #endif
 }
 
-/**
- * @brief Get output buffer size.
- * @details Call this function after v4l2dev_init() to get the output buffer size, because the resolution you specified may not match to any one that the device supports.
- */
-size_t v4l2dev_get_buffersize(v4l2dev device)
-{
-	if(!is_valid_v4l2dev(device)) return 0;
-	return device->buffer_size*3/4;
-}
-
-/**
- * @brief Close a V4L2 device and free all resource.
- */
 void v4l2dev_close(v4l2dev* device)
 {
 	enum v4l2_buf_type type;
@@ -273,11 +248,12 @@ void v4l2dev_close(v4l2dev* device)
 	*device = NULL;
 }
 
-/**
- * @brief Read a frame from V4L2 device. The output pixel format is I420.
- * @param device Target V4L2 device
- * @return Pointer to the memory mapped RAW buffer
- */
+size_t v4l2dev_get_buffersize(v4l2dev device)
+{
+	if(!is_valid_v4l2dev(device)) return 0;
+	return device->buffer_size*3/4;
+}
+
 unsigned char* v4l2dev_read(v4l2dev device)
 {
 	fd_set fds;
@@ -326,10 +302,15 @@ unsigned char* v4l2dev_read(v4l2dev device)
 		}
 
 		result = ioctl(device->fd, VIDIOC_QBUF, &buf);
+
+#ifdef	USE_YUV422_OUTPUT
+		memcpy(device->buffer, device->mmap_buffers[buf.index], device->buffer_size);
+#else
 #ifdef	SOFTWARE_YUV422_TO_YUV420
 		convert_yuv422_to_yuv420(device->mmap_buffers[buf.index], device->buffer, device->width, device->height);
 #else
 		ipu_buffer_update(device->ipu_handle, device->mmap_buffers[buf.index], device->buffer);
+#endif
 #endif
 		return device->buffer;
 	}

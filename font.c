@@ -1,29 +1,34 @@
-/**
- * @file font.c
- * @author Ruei-Yuan Lu (RueiYuan.Lu@gmail.com)
- */
 #include <stdlib.h>
 #include <memory.h>
 #include <pango/pangocairo.h>
 #include "font.h"
 
 
-
+/**
+ * @brief Text layout object
+ * @details You should <b>NOT</b> access this data structure directly.
+ */
 struct text_layout
 {
+	/** @brief Cairo surface */
 	cairo_surface_t* surface;
+
+	/** @brief Cairo handle */
 	cairo_t* cairo;
+
+	/** @brief Pango layout object */
 	PangoLayout* layout;
+
+	/** @brief Pointer to RAW image data */
 	unsigned char* surface_data;
-	int width, height;
+
+	/** @brief Width of buffer */
+	int width;
+
+	/** @brief Height of buffer */
+	int height;
 };
 
-/**
- * @brief Create text layout object.
- * @param width surface width
- * @param height surface height
- * @retval object handle
- */
 text_layout text_layout_create(const int width, const int height)
 {
 	text_layout layout = NULL;
@@ -44,10 +49,6 @@ text_layout text_layout_create(const int width, const int height)
 	return layout;
 }
 
-/**
- * @brief Delete text layout object.
- * @param layout Target object to delete
- */
 void text_layout_destroy(text_layout layout)
 {
 	if(!layout) return;
@@ -56,13 +57,6 @@ void text_layout_destroy(text_layout layout)
 
 }
 
-
-/**
- * @brief Set font to use for text layout
- * @param layout Target text layout object
- * @param font Font name, can be queried by using fc-list command
- * @param size Font size in pixel
- */
 void text_layout_set_font(text_layout layout, const char* font, const int size)
 {
 	PangoFontDescription *desc;
@@ -74,13 +68,6 @@ void text_layout_set_font(text_layout layout, const char* font, const int size)
 	pango_font_description_free(desc);
 }
 
-/**
- * @brief Render pango markup string to internal buffer.
- * @detail Render pango markup string to internal buffer. The internal buffer will be clean before rendering text.
- * @param layout Target text layout object
- * @param markup_text String to render
- * @see http://developer.gnome.org/pango/stable/PangoMarkupFormat.html
- */
 void text_layout_render_markup_text(text_layout layout, const char* markup_text)
 {
 	if(!layout||!markup_text) return;
@@ -92,16 +79,6 @@ void text_layout_render_markup_text(text_layout layout, const char* markup_text)
 
 }
 
-
-/**
- * @brief Write data in internal buffer to existed yuv420p surface.
- * @param layout Target text layout object that contains rendered image
- * @param x X coordinate of output image
- * @param y Y coordinate of output image
- * @param image Pointer to output image
- * @param img_w width of output image
- * @param img_h height of output image
- */
 void text_layout_copy_to_yuv420p(const text_layout layout, const int x, const int y, unsigned char* image, const int img_w, const int img_h)
 {
 	int i,j;
@@ -133,15 +110,6 @@ void text_layout_copy_to_yuv420p(const text_layout layout, const int x, const in
 	}
 }
 
-/**
- * @brief Write data in internal buffer to existed yuv422 surface.
- * @param layout Target text layout object that contains rendered image
- * @param x X coordinate of output image
- * @param y Y coordinate of output image
- * @param image Pointer to output image
- * @param img_w width of output image
- * @param img_h height of output image
- */
 void text_layout_copy_to_yuv422(const text_layout layout, const int x, const int y, unsigned char* image, const int img_w, const int img_h)
 {
 	int i,j;
@@ -162,6 +130,11 @@ void text_layout_copy_to_yuv422(const text_layout layout, const int x, const int
 			if(src[j])
 			{
 				destY[j * 2] = src[j];
+				destY[j * 2 + 1] = -128;
+				if((x + j) % 2)
+					destY[j * 2 - 1] = -128;
+				else
+					destY[j * 2 + 3] = -128;
 			}
 		}
 	}

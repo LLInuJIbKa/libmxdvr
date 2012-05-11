@@ -1,14 +1,7 @@
-/**
- * @file mxc_vpu.c
- * @author Ruei-Yuan Lu (RueiYuan.Lu@gmail.com)
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include "vpu_lib.h"
 #include "mxc_vpu.h"
-
-
 
 int vpu_init(void)
 {

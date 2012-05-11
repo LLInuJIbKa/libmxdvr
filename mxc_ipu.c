@@ -1,8 +1,3 @@
-/**
- * @file mxc_ipu.c
- * @author Ruei-Yuan Lu (RueiYuan.Lu@gmail.com)
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -56,16 +51,6 @@ int ipu_query_task(void)
 	return 0;
 }
 
-/**
- * @brief Initialize IPU
- * @param in_w Width of the input image
- * @param in_h Height of the input image
- * @param in_fmt Pixel format of the input image
- * @param out_w Width of the output image
- * @param out_h Height of the output image
- * @param out_fmt Pixel format of the output image
- * @param show Render output image to framebuffer
- */
 ipu_lib_handle_t* ipu_init(int in_w, int in_h, int in_fmt, int out_w, int out_h, int out_fmt, int show)
 {
 	ipu_lib_handle_t* ipu_handle = NULL;
@@ -95,9 +80,6 @@ ipu_lib_handle_t* ipu_init(int in_w, int in_h, int in_fmt, int out_w, int out_h,
 	return ipu_handle;
 }
 
-/**
- * @brief Uninitialize IPU
- */
 void ipu_uninit(ipu_lib_handle_t** ipu_handle)
 {
 	if(!*ipu_handle)
@@ -108,12 +90,6 @@ void ipu_uninit(ipu_lib_handle_t** ipu_handle)
 	*ipu_handle = NULL;
 }
 
-/**
- * @brief Update IPU buffers.
- * @details IPU operations are done by calling this function. Please make sure that pointers are valid and allocated with enough memory.
- * @param input_data Pointer to the input image
- * @param output_data Pointer to the output image
- */
 void ipu_buffer_update(ipu_lib_handle_t* ipu_handle, const unsigned char* input_data, unsigned char* output_data)
 {
 	global_ipu_handle= ipu_handle;
