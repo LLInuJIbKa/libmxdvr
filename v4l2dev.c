@@ -51,47 +51,32 @@ struct v4l2dev
 #ifdef SOFTWARE_YUV422_TO_YUV420
 static void convert_yuv422_to_yuv420(unsigned char *InBuff, unsigned char *OutBuff, int width, int height)
 {
-	int i = 0, j = 0, k = 0;
-	int UOffset = width * height;
-	int VOffset = (width * height) * 5 >> 2;
-	int line1 = 0, line2 = 0;
-	int m = 0, n = 0;
-	int y = 0, u = 0, v = 0;
-	u = UOffset;
-	v = VOffset;
-	for (i = 0, j = 1; i < height; i += 2, j += 2)
+	int i, j;
+	unsigned char* in;
+	unsigned char* in2;
+	unsigned char* out;
+	unsigned char* out2;
+
+	/* Write Y plane */
+	for(i = 0;i < width * height; ++i)
+		OutBuff[i] = InBuff[i * 2];
+
+
+	/* Write UV plane */
+	for(j = 0;j < height / 2; ++j)
 	{
-		/* Input Buffer Pointer Indexes */
-		line1 = i * width << 1;
-		line2 = j * width << 1;
-		/* Output Buffer Pointer Indexes */
-		m = width * y;
-		y = y + 1;
-		n = width * y;
-		y = y + 1;
-		/* Scan two lines at a time */
-		for (k = 0; k < width * 2; k += 4)
+		in = &(InBuff[j * 2 * width * 2]);
+		in2 = &(InBuff[(j * 2 + 1)* width * 2]);
+		out = &(OutBuff[width * height + j * width / 2]);
+		out2 = &(OutBuff[width * height * 5 / 4 + j * width / 2]);
+		for(i = 0;i < width / 2; ++i)
 		{
-			unsigned char Y1, Y2, U, V;
-			unsigned char Y3, Y4, U2, V2;
-			/* Read Input Buffer */
-			Y1 = InBuff[line1++];
-			U = InBuff[line1++];
-			Y2 = InBuff[line1++];
-			V = InBuff[line1++];
-			Y3 = InBuff[line2++];
-			U2 = InBuff[line2++];
-			Y4 = InBuff[line2++];
-			V2 = InBuff[line2++];
-			/* Write Output Buffer */
-			OutBuff[m++] = Y1;
-			OutBuff[m++] = Y2;
-			OutBuff[n++] = Y3;
-			OutBuff[n++] = Y4;
-			OutBuff[u++] = (U + U2) >> 1;
-			OutBuff[v++] = (V + V2) >> 1;
+			out[i] = (in[i * 4 + 1] + in2[i * 4 + 1]) / 2;
+			out2[i] = (in[i * 4 + 3] + in2[i * 4 + 3]) / 2;
 		}
+
 	}
+
 }
 #endif
 #endif
@@ -105,6 +90,21 @@ static int is_valid_v4l2dev(v4l2dev device)
 	return 1;
 }
 
+static int xioctl (int fd, int request, void *arg)
+{
+	int r;
+
+	do
+	{
+		sleep(0);
+		r = ioctl(fd, request, arg);
+	}
+	while (-1 == r && EINTR == errno);
+
+	return r;
+}
+
+
 v4l2dev v4l2dev_open(const char* device_node)
 {
 	v4l2dev device = NULL;
@@ -112,7 +112,7 @@ v4l2dev v4l2dev_open(const char* device_node)
 
 	if(!device_node) return NULL;
 
-	fd = open(device_node,  O_RDWR, 0);
+	fd = open(device_node, O_RDWR|O_NONBLOCK, 0);
 
 	if(fd == -1) return NULL;
 
@@ -137,7 +137,7 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 
 	/* Select input 0 */
 
-	result = ioctl(device->fd, VIDIOC_S_INPUT, &input_index);
+	result = xioctl(device->fd, VIDIOC_S_INPUT, &input_index);
 
 
 	/* Set pixel format */
@@ -148,7 +148,7 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 	fmt.fmt.pix.height	= height;
 	fmt.fmt.pix.pixelformat	= V4L2_PIX_FMT_YUYV;
 
-	if(-1 == ioctl(device->fd, VIDIOC_S_FMT, &fmt))
+	if(-1 == xioctl(device->fd, VIDIOC_S_FMT, &fmt))
 	{
 		fprintf(stderr, "Unsupported pixel format!\n");
 	}
@@ -156,7 +156,7 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 
 	/* Get real pixel format */
 
-	ioctl(device->fd, VIDIOC_G_FMT, &fmt);
+	xioctl(device->fd, VIDIOC_G_FMT, &fmt);
 	device->width	= fmt.fmt.pix.width;
 	device->height	= fmt.fmt.pix.height;
 
@@ -165,7 +165,7 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 	req.count               = n_buffers;
 	req.type                = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	req.memory              = V4L2_MEMORY_MMAP;
-	ioctl(device->fd, VIDIOC_REQBUFS, &req);
+	xioctl(device->fd, VIDIOC_REQBUFS, &req);
 
 	device->mmap_buffers = calloc(n_buffers, sizeof(unsigned char*));
 
@@ -177,7 +177,7 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 		buf.memory      = V4L2_MEMORY_MMAP;
 		buf.index       = i;
 
-		result = ioctl(device->fd, VIDIOC_QUERYBUF, &buf);
+		result = xioctl(device->fd, VIDIOC_QUERYBUF, &buf);
 		device->buffer_size = buf.length;
 		device->mmap_buffers[i] = mmap (NULL, buf.length, PROT_READ|PROT_WRITE, MAP_SHARED,device->fd, buf.m.offset);
 
@@ -196,11 +196,11 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 		buf.memory      = V4L2_MEMORY_MMAP;
 		buf.index       = i;
 
-		result = ioctl(device->fd, VIDIOC_QBUF, &buf);
+		result = xioctl(device->fd, VIDIOC_QBUF, &buf);
 	}
 
 	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	ioctl(device->fd, VIDIOC_STREAMON, &type);
+	xioctl(device->fd, VIDIOC_STREAMON, &type);
 
 #ifndef SOFTWARE_YUV422_TO_YUV420
 
@@ -222,7 +222,7 @@ void v4l2dev_close(v4l2dev* device)
 	/* Stop capturing */
 
 	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	ioctl(ptr->fd, VIDIOC_STREAMOFF, &type);
+	xioctl(ptr->fd, VIDIOC_STREAMOFF, &type);
 
 
 	/* Unmap buffers */
@@ -290,7 +290,7 @@ unsigned char* v4l2dev_read(v4l2dev device)
 		buf.type        = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		buf.memory      = V4L2_MEMORY_MMAP;
 
-		result = ioctl(device->fd, VIDIOC_DQBUF, &buf);
+		result = xioctl(device->fd, VIDIOC_DQBUF, &buf);
 
 		if(result == -1)
 		{
@@ -301,7 +301,7 @@ unsigned char* v4l2dev_read(v4l2dev device)
 			}else return NULL;
 		}
 
-		result = ioctl(device->fd, VIDIOC_QBUF, &buf);
+		result = xioctl(device->fd, VIDIOC_QBUF, &buf);
 
 #ifdef	USE_YUV422_OUTPUT
 		memcpy(device->buffer, device->mmap_buffers[buf.index], device->buffer_size);
