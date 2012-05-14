@@ -6,7 +6,15 @@
 #define MXC_VPU_H_
 
 
+/**
+ * @brief Initialize VPU.
+ */
 int vpu_init(void);
+
+/**
+ * @brief Uninitialize VPU.
+ */
+void vpu_uninit(void);
 
 
 #endif /* MXC_VPU_H_ */

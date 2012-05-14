@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <time.h>
 #include "platform.h"
 #include "v4l2dev.h"
@@ -42,8 +43,8 @@ int main(int argc, char **argv)
 	ipu_handle = ipu_init(CAPTURE_WIDTH, CAPTURE_HEIGHT, IPU_PIX_FMT_YUV420P, DISPLAY_WIDTH, DISPLAY_HEIGHT, IPU_PIX_FMT_RGB565, 1);
 	ipu_query_task();
 
-//	vpu_init();
-//	vpu_UnInit();
+	vpu_init();
+
 
 	text = text_layout_create(280, 30);
 	text_layout_set_font(text, "Liberation Mono", 24);
@@ -66,6 +67,7 @@ int main(int argc, char **argv)
 		}
 
 		text_layout_copy_to_yuv420p(text, 360, 400, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
+		//text_layout_copy_to_yuv422(text, 360, 400, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
 		ipu_buffer_update(ipu_handle, buffer, rgb_buffer);
 
 		/* Detect ENTER key */
@@ -82,6 +84,7 @@ int main(int argc, char **argv)
 
 	text_layout_destroy(text);
 	ipu_uninit(&ipu_handle);
+	vpu_uninit();
 	v4l2dev_close(&device);
 
 	return EXIT_SUCCESS;

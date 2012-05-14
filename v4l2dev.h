@@ -13,10 +13,12 @@
 /**
  * @brief Don't convert output image into yuv420p.
  */
-#define USE_YUV422_OUTPUT
+//#define USE_YUV422_OUTPUT
 
 /**
- * @brief Use software 422-to-420p conversion. No effect when USE_YUV422_OUTPUT is defined.
+ * @brief Use software 422-to-420p conversion.
+ * @details Use CPU to do 422-to-420p conversion. <b>It cost a lot of CPU time, but is needed for VPU H.264 encoding.</b><br/><br/>
+ * This macro has no effect when USE_YUV422_OUTPUT is defined.
  */
 #define SOFTWARE_YUV422_TO_YUV420
 
@@ -53,9 +55,9 @@ void v4l2dev_close(v4l2dev* device);
 size_t v4l2dev_get_buffersize(v4l2dev device);
 
 /**
- * @brief Read a frame from V4L2 device. The output pixel format is I420.
+ * @brief Read a frame from V4L2 device. The default output pixel format is yuv420p.
  * @param device Target V4L2 device
- * @return Pointer to the memory mapped RAW buffer
+ * @return Pointer to the memory mapped RAW buffer or yuv420p converted buffer
  */
 unsigned char* v4l2dev_read(v4l2dev device);
 

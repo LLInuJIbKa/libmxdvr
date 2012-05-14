@@ -13,6 +13,10 @@
 #include <linux/ipu.h>
 #include "mxc_ipu_hl_lib.h"
 
+
+/**
+ * @brief Query IPU task. Show debug messages to stderr.
+ */
 int ipu_query_task(void);
 
 /**
@@ -35,6 +39,7 @@ void ipu_uninit(ipu_lib_handle_t** ipu_handle);
 /**
  * @brief Update IPU buffers.
  * @details IPU operations are done by calling this function. Please make sure that pointers are valid and allocated with enough memory.
+ * @param ipu_handle IPU handle from libipu
  * @param input_data Pointer to the input image
  * @param output_data Pointer to the output image
  */

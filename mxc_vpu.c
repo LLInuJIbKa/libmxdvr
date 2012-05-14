@@ -3,6 +3,8 @@
 #include "vpu_lib.h"
 #include "mxc_vpu.h"
 
+
+
 int vpu_init(void)
 {
 	vpu_versioninfo ver;
@@ -12,7 +14,11 @@ int vpu_init(void)
 
 	fprintf(stderr, "VPU firmware version: %d.%d.%d\n", ver.fw_major, ver.fw_minor, ver.fw_release);
 	fprintf(stderr, "VPU library version: %d.%d.%d\n", ver.lib_major, ver.lib_minor, ver.lib_release);
-
-
 	return 0;
+}
+
+
+void vpu_uninit(void)
+{
+	vpu_UnInit();
 }
