@@ -1,7 +1,7 @@
 CC=/opt/toolchain/bin/arm-none-linux-gnueabi-gcc 
 ROOTFS:=/media/SmartHome_SD
 TARGET_SHARED_OBJECT:=libmxdvr.so 
-SOURCE_FILES:=v4l2dev.c mxc_ipu.c mxc_vpu.c platform.c font.c
+SOURCE_FILES:=v4l2dev.c mxc_ipu.c mxc_vpu.c platform.c font.c framebuf.c
 OBJECTS:=$(subst .c,.o, $(SOURCE_FILES))
 
 
@@ -31,7 +31,7 @@ $(TARGET_SHARED_OBJECT): $(OBJECTS)
 	@echo "  LD	$@"
 	@$(CC) -shared $(LDFLAGS) $^ -o $@
 
-v4l2test: v4l2test.o $(OBJECTS)
+v4l2test: v4l2test.o $(TARGET_SHARED_OBJECT)
 	@echo "  LD	$@"
 	@$(CC) -L./ $(LDFLAGS) -lmxdvr $^ -o $@
 

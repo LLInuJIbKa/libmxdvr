@@ -99,7 +99,7 @@ static int xioctl (int fd, int request, void *arg)
 		sleep(0);
 		r = ioctl(fd, request, arg);
 	}
-	while (-1 == r && EINTR == errno);
+	while(-1 == r && EINTR == errno);
 
 	return r;
 }
