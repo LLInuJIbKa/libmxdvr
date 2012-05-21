@@ -6,11 +6,15 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <stdint.h>
 #include "v4l2dev.h"
 #ifndef	SOFTWARE_YUV422_TO_YUV420
 #include "mxc_ipu.h"
 #endif
-
+#include "mxc_vpu.h"
+#ifdef USE_FMT_MJPG
+#include "mjpeg.h"
+#endif
 
 /**
  * @brief Handle object of V4L2 devices
@@ -45,9 +49,11 @@ struct v4l2dev
 	ipu_lib_handle_t* ipu_handle;
 #endif
 #endif
+	DecodingInstance decoding;
+
 };
 
-#ifndef USE_YUV422_OUTPUT
+#ifndef USE_FMT_MJPG
 #ifdef SOFTWARE_YUV422_TO_YUV420
 static void convert_yuv422_to_yuv420(unsigned char *InBuff, unsigned char *OutBuff, int width, int height)
 {
@@ -90,13 +96,13 @@ static int is_valid_v4l2dev(v4l2dev device)
 	return 1;
 }
 
-static int xioctl (int fd, int request, void *arg)
+static int xioctl (int fd, int request, void* arg)
 {
 	int r;
 
 	do
 	{
-		sleep(0);
+		usleep(1000);
 		r = ioctl(fd, request, arg);
 	}
 	while(-1 == r && EINTR == errno);
@@ -146,7 +152,11 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 	fmt.type		= V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	fmt.fmt.pix.width	= width;
 	fmt.fmt.pix.height	= height;
+#ifdef USE_FMT_MJPG
+	fmt.fmt.pix.pixelformat	= V4L2_PIX_FMT_MJPEG;
+#else
 	fmt.fmt.pix.pixelformat	= V4L2_PIX_FMT_YUYV;
+#endif
 
 	if(-1 == xioctl(device->fd, VIDIOC_S_FMT, &fmt))
 	{
@@ -186,7 +196,15 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 
 	device->n_valid_buffers = i;
 
+#ifdef USE_FMT_MJPG
+	/* The output pixel format is rgb24 */
+
+	device->buffer = calloc(1, device->width * device->height * 3);
+#else
+	/* The output pixel format is yuv420p */
+
 	device->buffer = calloc(1, device->width * device->height * 3 / 2);
+#endif
 
 	for(i = 0;i < device->n_valid_buffers;i++)
 	{
@@ -203,10 +221,13 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 	xioctl(device->fd, VIDIOC_STREAMON, &type);
 
 #ifndef SOFTWARE_YUV422_TO_YUV420
-
 	/* Setup hardware accelerated YUYV to I420 conversion and IPU display */
+
 	device->ipu_handle = ipu_init(device->width, device->height, IPU_PIX_FMT_YUYV, device->width, device->height, IPU_PIX_FMT_YUV420P, 0);
 #endif
+
+//	device->decoding = vpu_create_decoding_instance(device->buffer, MEMORYBLOCK, STD_MJPG);
+
 }
 
 void v4l2dev_close(v4l2dev* device)
@@ -301,10 +322,8 @@ unsigned char* v4l2dev_read(v4l2dev device)
 			}else return NULL;
 		}
 
-		result = xioctl(device->fd, VIDIOC_QBUF, &buf);
-
-#ifdef	USE_YUV422_OUTPUT
-		memcpy(device->buffer, device->mmap_buffers[buf.index], device->buffer_size);
+#ifdef USE_FMT_MJPG
+		jpeg_to_raw(device->mmap_buffers[buf.index], buf.bytesused, device->buffer);
 #else
 #ifdef	SOFTWARE_YUV422_TO_YUV420
 		convert_yuv422_to_yuv420(device->mmap_buffers[buf.index], device->buffer, device->width, device->height);
@@ -312,6 +331,9 @@ unsigned char* v4l2dev_read(v4l2dev device)
 		ipu_buffer_update(device->ipu_handle, device->mmap_buffers[buf.index], device->buffer);
 #endif
 #endif
+		/* Unlock */
+		result = xioctl(device->fd, VIDIOC_QBUF, &buf);
+
 		return device->buffer;
 	}
 	return NULL;

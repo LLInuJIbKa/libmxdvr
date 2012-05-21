@@ -9,18 +9,18 @@
 
 #include <linux/videodev2.h>
 
-
-/**
- * @brief Don't convert output image into yuv420p.
- */
-//#define USE_YUV422_OUTPUT
-
 /**
  * @brief Use software 422-to-420p conversion.
  * @details Use CPU to do 422-to-420p conversion. <b>It cost a lot of CPU time, but is needed for VPU H.264 encoding.</b><br/><br/>
  * This macro has no effect when USE_YUV422_OUTPUT is defined.
  */
 #define SOFTWARE_YUV422_TO_YUV420
+
+/**
+ * @brief Use Motion JPEG as pixel format instead of RAW
+ * @details Enable this macro if you wish to support 720p with 25+ fps.
+ */
+#define USE_FMT_MJPG
 
 /**
  * @brief Handle object of V4L2 devices
