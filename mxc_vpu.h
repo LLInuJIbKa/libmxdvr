@@ -5,8 +5,17 @@
 #ifndef MXC_VPU_H_
 #define MXC_VPU_H_
 
+#include "vpu_lib.h"
 
 typedef struct EncodingInstance* EncodingInstance;
+typedef struct DecodingInstance* DecodingInstance;
+
+typedef enum
+{
+	FILENAME,
+	MEMORYBLOCK
+}InputType;
+
 
 /**
  * @brief Initialize VPU.
@@ -26,7 +35,6 @@ void vpu_uninit(void);
  */
 EncodingInstance vpu_create_encoding_instance(const int src_width, const int src_height, const char* filename);
 
-
 /**
  * @brief Encode one frame and write to file.
  * @param instance EncodingInstance object
@@ -39,5 +47,9 @@ int vpu_encode_one_frame(EncodingInstance instance, const unsigned char* data);
  * @param instance Pointer to the instance
  */
 void vpu_close_encoding_instance(EncodingInstance* instance);
+
+
+DecodingInstance vpu_create_decoding_instance(const char* data, const InputType type, const int format);
+int vpu_decode_one_frame(DecodingInstance instance);
 
 #endif /* MXC_VPU_H_ */

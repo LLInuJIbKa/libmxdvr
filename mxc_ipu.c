@@ -26,7 +26,7 @@ int ipu_query_task(void)
 
 	for (i = 0; i< MAX_TASK_NUM; i++) {
 		task.index = i;
-		mxc_ipu_lib_task_control(IPU_CTL_TASK_QUERY, (void *)(&task), NULL);
+		mxc_ipu_lib_task_control(IPU_CTL_TASK_QUERY, (void*)(&task), NULL);
 		if (task.task_pid) {
 			fprintf(stderr, "\ntask %d:\n", i);
 			fprintf(stderr, "\tpid: %d\n", task.task_pid);
@@ -75,7 +75,7 @@ ipu_lib_handle_t* ipu_init(int in_w, int in_h, int in_fmt, int out_w, int out_h,
 	output.output_win.win_w = out_w;
 	output.output_win.win_h = out_h;
 
-	mxc_ipu_lib_task_init(&input, NULL, &output, OP_NORMAL_MODE, ipu_handle);
+	mxc_ipu_lib_task_init(&input, NULL, &output, OP_NORMAL_MODE|TASK_VF_MODE, ipu_handle);
 
 	return ipu_handle;
 }
