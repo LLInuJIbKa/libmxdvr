@@ -18,6 +18,7 @@
 #define STREAM_FILL_SIZE	(0x40000)
 
 typedef unsigned long u32;
+typedef int (*DATA_FILLER_FUNCTION)(DecodingInstance instance, unsigned char* buffer, const size_t size);
 
 
 struct DecodingInstance
@@ -52,39 +53,101 @@ struct DecodingInstance
 	vpu_mem_desc ps_mem_desc;
 	vpu_mem_desc slice_mem_desc;
 
-	int fd;
+
 	InputType type;
 	int format;
 	int fps;
 	DecParam decparam;
+
+
+	int fd;
+
+	unsigned char* buffer;
+	int buffer_size;
+	int buffer_read_position;
+
+
+	DATA_FILLER_FUNCTION data_filler;
 };
 
 
-static int vpu_read(const int fd, char *vptr, int n)
+//static int vpu_read(const int fd, char *vptr, int n)
+//{
+//	int nleft = 0;
+//	int nread = 0;
+//	char *ptr;
+//
+//	ptr = vptr;
+//	nleft = n;
+//	while(nleft > 0)
+//	{
+//		if((nread = read(fd, ptr, nleft)) <= 0)
+//		{
+//			if(nread == 0)
+//				return (n - nleft);
+//
+//			perror("read");
+//			return (-1);
+//		}
+//
+//		nleft -= nread;
+//		ptr += nread;
+//	}
+//
+//	return (nread);
+//}
+
+
+int data_fill_from_file(DecodingInstance instance, unsigned char* buffer, const size_t size)
 {
-	int nleft = 0;
-	int nread = 0;
-	char *ptr;
+	int data_read = 0;
+	int left;
+	unsigned char* ptr = buffer;
 
-	ptr = vptr;
-	nleft = n;
-	while(nleft > 0)
+
+	left = size;
+	while(left > 0)
 	{
-		if((nread = read(fd, ptr, nleft)) <= 0)
-		{
-			if(nread == 0)
-				return (n - nleft);
-
-			perror("read");
-			return (-1); /* error EINTR XXX */
-		}
-
-		nleft -= nread;
-		ptr += nread;
+		data_read = read(instance->fd, buffer, left);
+		if(data_read == 0) return (size - left);
+		left -= data_read;
+		ptr += data_read;
 	}
 
-	return (nread);
+	return data_read;
 }
+
+
+int data_fill_from_memory(DecodingInstance instance, unsigned char* buffer, const size_t size)
+{
+	int left = instance->buffer_size - instance->buffer_read_position;
+	unsigned char* ptr = instance->buffer + instance->buffer_read_position;
+
+
+	if(left)
+	{
+		memcpy(buffer, ptr, size);
+
+		if(size <= left)
+		{
+			instance->buffer_read_position += size;
+			fprintf(stderr, "Data read: %d bytes\n", size);
+			return size;
+		}
+		else
+		{
+			fprintf(stderr, "Data read: %d bytes\n", left);
+			return left;
+		}
+	}
+
+	fprintf(stderr, "EOF\n", size);
+	return -EAGAIN;
+
+}
+
+
+
 
 
 static int decoder_open(struct DecodingInstance* instance)
@@ -174,8 +237,9 @@ static int dec_fill_bsbuffer(struct DecodingInstance* instance, int defaultsize,
 	{
 		room = bs_va_endaddr - target_addr;
 
-		if(instance->fd != -1)
-			nread = vpu_read(instance->fd, (void*)target_addr, room);
+		//if(instance->fd != -1)
+		//	nread = vpu_read(instance->fd, (void*)target_addr, room);
+		nread = instance->data_filler(instance, (void*)target_addr, room);
 
 
 		if(nread <= 0)
@@ -199,7 +263,9 @@ static int dec_fill_bsbuffer(struct DecodingInstance* instance, int defaultsize,
 
 			/* read the remaining */
 			space = nread;
-			nread = vpu_read(instance->fd, (void*)bs_va_startaddr, (size - room));
+			//nread = vpu_read(instance->fd, (void*)bs_va_startaddr, (size - room));
+			nread = instance->data_filler(instance, (void*)bs_va_startaddr, (size - room));
+
 			if(nread <= 0)
 			{
 				/* EOF or error */
@@ -219,7 +285,8 @@ static int dec_fill_bsbuffer(struct DecodingInstance* instance, int defaultsize,
 	}
 	else
 	{
-		nread = vpu_read(instance->fd, (void*)target_addr, size);
+		//nread = vpu_read(instance->fd, (void*)target_addr, size);
+		nread = instance->data_filler(instance, (void*)target_addr, size);
 		if(nread <= 0)
 		{
 			/* EOF or error */
@@ -241,6 +308,7 @@ update:
 		ret = vpu_DecUpdateBitstreamBuffer(handle, nread);
 		if(ret != RETCODE_SUCCESS)
 		{
+			fprintf(stderr, "Fuck!\n");
 			return -1;
 		}
 		*fill_end_bs = 0;
@@ -252,6 +320,7 @@ update:
 			ret = vpu_DecUpdateBitstreamBuffer(handle, STREAM_END_SIZE);
 			if(ret != RETCODE_SUCCESS)
 			{
+				fprintf(stderr, "Fuck!\n");
 				return -1;
 			}
 			*fill_end_bs = 1;
@@ -264,8 +333,7 @@ update:
 
 static int decoder_parse(struct DecodingInstance* instance)
 {
-	DecInitialInfo initinfo =
-	{ 0 };
+	DecInitialInfo initinfo = {};
 	DecHandle handle = instance->handle;
 	int align, profile, level, extended_fbcount;
 	RetCode ret;
@@ -381,6 +449,7 @@ static int decoder_parse(struct DecodingInstance* instance)
 	dec->picheight = MAX_FRAME_HEIGHT;
 #endif
 
+	fprintf(stderr, "W:%d, H:%d\n", instance->picwidth, instance->picheight);
 	if((instance->picwidth == 0) || (instance->picheight == 0))
 		return -1;
 
@@ -479,27 +548,27 @@ static int decoder_allocate_framebuffer(struct DecodingInstance *instance)
 		return -1;
 	}
 
-//	if(((dst_scheme != PATH_V4L2) && (dst_scheme != PATH_IPU)) || (((dst_scheme == PATH_V4L2) || (dst_scheme == PATH_IPU)) && deblock_en))
-//	{
-//
-//		for(i = 0; i < totalfb; i++)
-//		{
-//			pfbpool[i] = framebuf_alloc(instance->format, instance->mjpg_fmt, instance->stride, instance->picheight);
-//			if(pfbpool[i] == NULL)
-//			{
-//				totalfb = i;
-//				goto err;
-//			}
-//
-//			fb[i].bufY = pfbpool[i]->addrY;
-//			fb[i].bufCb = pfbpool[i]->addrCb;
-//			fb[i].bufCr = pfbpool[i]->addrCr;
-//			if(cpu_is_mx37() || cpu_is_mx5x())
-//			{
-//				fb[i].bufMvCol = pfbpool[i]->mvColBuf;
-//			}
-//		}
-//	}
+	//if(((dst_scheme != PATH_V4L2) && (dst_scheme != PATH_IPU)) || (((dst_scheme == PATH_V4L2) || (dst_scheme == PATH_IPU)) && deblock_en))
+	{
+
+		for(i = 0; i < totalfb; i++)
+		{
+			pfbpool[i] = framebuf_alloc(instance->format, instance->mjpg_fmt, instance->stride, instance->picheight);
+			if(pfbpool[i] == NULL)
+			{
+				totalfb = i;
+				goto err;
+			}
+
+			fb[i].bufY = pfbpool[i]->addrY;
+			fb[i].bufCb = pfbpool[i]->addrCb;
+			fb[i].bufCr = pfbpool[i]->addrCr;
+			if(cpu_is_mx37() || cpu_is_mx5x())
+			{
+				fb[i].bufMvCol = pfbpool[i]->mvColBuf;
+			}
+		}
+	}
 
 //	if((dst_scheme == PATH_V4L2) || (dst_scheme == PATH_IPU))
 	{
@@ -651,9 +720,8 @@ int vpu_decode_one_frame(DecodingInstance instance)
 	int is_waited_int = 0;
 	char *delay_ms, *endptr;
 
+	if(instance->type == MEMORYBLOCK && instance->buffer_size == 0) return -1;
 	img_size = instance->picwidth * instance->picheight;
-
-
 	ret = vpu_DecStartOneFrame(handle, &(instance->decparam));
 
 	is_waited_int = 0;
@@ -693,7 +761,7 @@ int vpu_decode_one_frame(DecodingInstance instance)
 		outinfo.indexFrameDisplay = rotid;
 	}
 
-	dprintf(4, "frame_id = %d\n", (int)frame_id);
+	fprintf(stderr, "frame_id = %d\n", (int)frame_id);
 	if(ret != RETCODE_SUCCESS)
 	{
 		return -1;
@@ -709,7 +777,7 @@ int vpu_decode_one_frame(DecodingInstance instance)
 					field = V4L2_FIELD_INTERLACED_TB;
 				else
 					field = V4L2_FIELD_INTERLACED_BT;
-				dprintf(3, "Top Field First flag: %d, dec_idx %d\n", outinfo.topFieldFirst, decIndex);
+				fprintf(stderr, "Top Field First flag: %d, dec_idx %d\n", outinfo.topFieldFirst, decIndex);
 			}
 		}
 	}
@@ -724,7 +792,6 @@ int vpu_decode_one_frame(DecodingInstance instance)
 
 
 	actual_display_index = outinfo.indexFrameDisplay;
-
 
 
 	if(err)
@@ -744,29 +811,23 @@ int vpu_decode_one_frame(DecodingInstance instance)
 
 	pfb = pfbpool[actual_display_index];
 
+
 	yuv_addr = pfb->addrY + pfb->desc.virt_uaddr - pfb->desc.phy_addr;
 
 	return yuv_addr;
 }
 
-DecodingInstance vpu_create_decoding_instance(const char* data, const InputType type, const int format)
+DecodingInstance vpu_create_decoding_instance(void* input, const InputType type, const int format)
 {
 	DecodingInstance instance = NULL;
 	int ret, eos = 0, fill_end_bs = 0, fillsize = 0;
 	DecParam decparam = {};
-	int rot_en, rot_stride, fwidth, fheight;
-
 
 	instance = calloc(1, sizeof(struct DecodingInstance));
 	instance->mem_desc.size = STREAM_BUF_SIZE;
 	ret = IOGetPhyMem(&(instance->mem_desc));
 
-	if(IOGetVirtMem(&(instance->mem_desc)) <= 0)
-	{
-		IOFreePhyMem(&(instance->mem_desc));
-		free(instance);
-		return NULL;
-	}
+	IOGetVirtMem(&(instance->mem_desc));
 
 	instance->phy_bsbuf_addr = instance->mem_desc.phy_addr;
 	instance->virt_bsbuf_addr = instance->mem_desc.virt_uaddr;
@@ -785,17 +846,24 @@ DecodingInstance vpu_create_decoding_instance(const char* data, const InputType 
 		instance->phy_ps_buf = instance->ps_mem_desc.phy_addr;
 	}
 
-	instance->type = type;
 	instance->format = format;
+	instance->type = type;
 
 	if(type == FILENAME)
 	{
-		instance->fd = open(data, O_RDONLY);
-	}else	instance->fd = -1;
+		instance->fd = open((const char*)input, O_RDONLY);
+		instance->data_filler = data_fill_from_file;
+	}else if(type == MEMORYBLOCK)
+	{
+		instance->buffer = (unsigned char*)input;
+		instance->buffer_size = 100000;
+		instance->data_filler = data_fill_from_memory;
+	}
 
-	decoder_open(instance);
-	dec_fill_bsbuffer(instance, fillsize, &eos, &fill_end_bs);
-	decoder_parse(instance);
+
+	ret = decoder_open(instance);
+	ret = dec_fill_bsbuffer(instance, fillsize, &eos, &fill_end_bs);
+	ret = decoder_parse(instance);
 
 	if(format == STD_AVC)
 	{
@@ -816,4 +884,10 @@ DecodingInstance vpu_create_decoding_instance(const char* data, const InputType 
 
 
 	return instance;
+}
+
+void vpu_set_input_buffer_size(DecodingInstance instance, const size_t size)
+{
+	if(instance->type != MEMORYBLOCK) return;
+	instance->buffer_size = size;
 }

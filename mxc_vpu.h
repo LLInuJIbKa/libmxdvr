@@ -49,7 +49,8 @@ int vpu_encode_one_frame(EncodingInstance instance, const unsigned char* data);
 void vpu_close_encoding_instance(EncodingInstance* instance);
 
 
-DecodingInstance vpu_create_decoding_instance(const char* data, const InputType type, const int format);
+DecodingInstance vpu_create_decoding_instance(void* input, const InputType type, const int format);
+void vpu_set_input_buffer_size(DecodingInstance instance, const size_t size);
 int vpu_decode_one_frame(DecodingInstance instance);
 
 #endif /* MXC_VPU_H_ */
