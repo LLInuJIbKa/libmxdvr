@@ -18,6 +18,8 @@
 #define STREAM_FILL_SIZE	(0x40000)
 
 typedef unsigned long u32;
+typedef unsigned short u16;
+typedef unsigned char u8;
 typedef int (*DATA_FILLER_FUNCTION)(DecodingInstance instance, unsigned char* buffer, const size_t size);
 
 
@@ -71,134 +73,45 @@ struct DecodingInstance
 };
 
 
-//static int vpu_read(const int fd, char *vptr, int n)
-//{
-//	int nleft = 0;
-//	int nread = 0;
-//	char *ptr;
-//
-//	ptr = vptr;
-//	nleft = n;
-//	while(nleft > 0)
-//	{
-//		if((nread = read(fd, ptr, nleft)) <= 0)
-//		{
-//			if(nread == 0)
-//				return (n - nleft);
-//
-//			perror("read");
-//			return (-1);
-//		}
-//
-//		nleft -= nread;
-//		ptr += nread;
-//	}
-//
-//	return (nread);
-//}
-
-
-int data_fill_from_file(DecodingInstance instance, unsigned char* buffer, const size_t size)
+static int freadn(int fd, void *vptr, size_t n)
 {
-	int data_read = 0;
-	int left;
-	unsigned char* ptr = buffer;
+	int nleft = 0;
+	int nread = 0;
+	char *ptr;
 
-
-	left = size;
-	while(left > 0)
+	ptr = vptr;
+	nleft = n;
+	while(nleft > 0)
 	{
-		data_read = read(instance->fd, buffer, left);
-		if(data_read == 0) return (size - left);
-		left -= data_read;
-		ptr += data_read;
+		if((nread = read(fd, ptr, nleft)) <= 0)
+		{
+			if(nread == 0)
+				return (n - nleft);
+
+			perror("read");
+			return (-1);
+		}
+
+		nleft -= nread;
+		ptr += nread;
 	}
 
-	return data_read;
+	return (nread);
+}
+
+static int vpu_read(int fd, char *buf, int n)
+{
+	return freadn(fd, buf, n);
 }
 
 
-int data_fill_from_memory(DecodingInstance instance, unsigned char* buffer, const size_t size)
-{
-	int left = instance->buffer_size - instance->buffer_read_position;
-	unsigned char* ptr = instance->buffer + instance->buffer_read_position;
-
-
-	if(left)
-	{
-		memcpy(buffer, ptr, size);
-
-		if(size <= left)
-		{
-			instance->buffer_read_position += size;
-			fprintf(stderr, "Data read: %d bytes\n", size);
-			return size;
-		}
-		else
-		{
-			fprintf(stderr, "Data read: %d bytes\n", left);
-			return left;
-		}
-	}
-
-	fprintf(stderr, "EOF\n", size);
-	return -EAGAIN;
-
-}
-
-
-
-
-
-static int decoder_open(struct DecodingInstance* instance)
+static int dec_fill_bsbuffer(DecodingInstance dec,
+		u32 bs_va_startaddr, u32 bs_va_endaddr,
+		u32 bs_pa_startaddr, int defaultsize,
+		int *eos, int *fill_end_bs)
 {
 	RetCode ret;
-	DecHandle handle = NULL;
-	DecOpenParam oparam = {};
-
-	oparam.bitstreamFormat = instance->format;
-	oparam.bitstreamBuffer = instance->phy_bsbuf_addr;
-	oparam.bitstreamBufferSize = STREAM_BUF_SIZE;
-	oparam.reorderEnable = instance->reorderEnable;
-//	oparam.mp4DeblkEnable = instance->cmdl->deblock_en;
-//	oparam.chromaInterleave = instance->cmdl->chromaInterleave;
-//	oparam.mp4Class = instance->cmdl->mp4Class;
-	oparam.mjpg_thumbNailDecEnable = 0;
-
-	/*
-	 * mp4 deblocking filtering is optional out-loop filtering for image
-	 * quality. In other words, mpeg4 deblocking is post processing.
-	 * So, host application need to allocate new frame buffer.
-	 * - On MX27, VPU doesn't support mpeg4 out loop deblocking filtering.
-	 * - On MX37 and MX51, VPU control the buffer internally and return one
-	 *   more buffer after vpu_DecGetInitialInfo().
-	 * - On MX32, host application need to set frame buffer externally via
-	 *   the command DEC_SET_DEBLOCK_OUTPUT.
-	 */
-	if(oparam.mp4DeblkEnable == 1)
-	{
-//		dec->cmdl->deblock_en = 0;
-	}
-
-	oparam.psSaveBuffer = instance->phy_ps_buf;
-	oparam.psSaveBufferSize = PS_SAVE_SIZE;
-
-	ret = vpu_DecOpen(&handle, &oparam);
-	if (ret != RETCODE_SUCCESS) {
-		return -1;
-	}
-
-	instance->handle = handle;
-	return 0;
-}
-
-static int dec_fill_bsbuffer(struct DecodingInstance* instance, int defaultsize, int *eos, int *fill_end_bs)
-{
-	DecHandle handle = instance->handle;
-	u32 bs_va_startaddr = instance->virt_bsbuf_addr;
-	u32 bs_va_endaddr = (instance->virt_bsbuf_addr + STREAM_BUF_SIZE);
-	u32 bs_pa_startaddr = instance->phy_bsbuf_addr;
-	RetCode ret;
+	DecHandle handle = dec->handle;
 	PhysicalAddress pa_read_ptr, pa_write_ptr;
 	u32 target_addr, space;
 	int size;
@@ -206,9 +119,9 @@ static int dec_fill_bsbuffer(struct DecodingInstance* instance, int defaultsize,
 	*eos = 0;
 
 	ret = vpu_DecGetBitstreamBuffer(handle, &pa_read_ptr, &pa_write_ptr, &space);
-
 	if(ret != RETCODE_SUCCESS)
 	{
+		fputs("vpu_DecGetBitstreamBuffer failed\n", stderr);
 		return -1;
 	}
 
@@ -236,12 +149,7 @@ static int dec_fill_bsbuffer(struct DecodingInstance* instance, int defaultsize,
 	if((target_addr + size) > bs_va_endaddr)
 	{
 		room = bs_va_endaddr - target_addr;
-
-		//if(instance->fd != -1)
-		//	nread = vpu_read(instance->fd, (void*)target_addr, room);
-		nread = instance->data_filler(instance, (void*)target_addr, room);
-
-
+		nread = vpu_read(dec->fd, (void *)target_addr, room);
 		if(nread <= 0)
 		{
 			/* EOF or error */
@@ -263,9 +171,7 @@ static int dec_fill_bsbuffer(struct DecodingInstance* instance, int defaultsize,
 
 			/* read the remaining */
 			space = nread;
-			//nread = vpu_read(instance->fd, (void*)bs_va_startaddr, (size - room));
-			nread = instance->data_filler(instance, (void*)bs_va_startaddr, (size - room));
-
+			nread = vpu_read(dec->fd, (void *)bs_va_startaddr, (size - room));
 			if(nread <= 0)
 			{
 				/* EOF or error */
@@ -285,8 +191,7 @@ static int dec_fill_bsbuffer(struct DecodingInstance* instance, int defaultsize,
 	}
 	else
 	{
-		//nread = vpu_read(instance->fd, (void*)target_addr, size);
-		nread = instance->data_filler(instance, (void*)target_addr, size);
+		nread = vpu_read(dec->fd, (void *)target_addr, size);
 		if(nread <= 0)
 		{
 			/* EOF or error */
@@ -302,13 +207,12 @@ static int dec_fill_bsbuffer(struct DecodingInstance* instance, int defaultsize,
 		}
 	}
 
-update:
-	if(*eos == 0)
+	update: if(*eos == 0)
 	{
 		ret = vpu_DecUpdateBitstreamBuffer(handle, nread);
 		if(ret != RETCODE_SUCCESS)
 		{
-			fprintf(stderr, "Fuck!\n");
+			fputs("vpu_DecUpdateBitstreamBuffer failed\n", stderr);
 			return -1;
 		}
 		*fill_end_bs = 0;
@@ -320,7 +224,7 @@ update:
 			ret = vpu_DecUpdateBitstreamBuffer(handle, STREAM_END_SIZE);
 			if(ret != RETCODE_SUCCESS)
 			{
-				fprintf(stderr, "Fuck!\n");
+				fputs("vpu_DecUpdateBitstreamBuffer failed\n", stderr);
 				return -1;
 			}
 			*fill_end_bs = 1;
@@ -331,143 +235,87 @@ update:
 	return nread;
 }
 
-static int decoder_parse(struct DecodingInstance* instance)
+
+static int decoder_open(DecodingInstance dec)
 {
-	DecInitialInfo initinfo = {};
-	DecHandle handle = instance->handle;
+	RetCode ret;
+	DecHandle handle = NULL;
+	DecOpenParam oparam = {};
+
+	oparam.bitstreamFormat = dec->format;
+	oparam.bitstreamBuffer = dec->phy_bsbuf_addr;
+	oparam.bitstreamBufferSize = STREAM_BUF_SIZE;
+	oparam.reorderEnable = dec->reorderEnable;
+	oparam.mp4DeblkEnable = 0;
+	oparam.chromaInterleave = 0;
+	oparam.mp4Class = 0;
+	oparam.mjpg_thumbNailDecEnable = 0;
+	oparam.psSaveBuffer = dec->phy_ps_buf;
+	oparam.psSaveBufferSize = PS_SAVE_SIZE;
+
+	ret = vpu_DecOpen(&handle, &oparam);
+	if (ret != RETCODE_SUCCESS) {
+		fputs("vpu_DecOpen failed\n", stderr);
+		return -1;
+	}
+
+	dec->handle = handle;
+	return 0;
+}
+
+static int decoder_parse(DecodingInstance dec)
+{
+	DecInitialInfo initinfo = {0};
+	DecHandle handle = dec->handle;
 	int align, profile, level, extended_fbcount;
 	RetCode ret;
 	char *count;
 
-	/*
-	 * If userData report is enabled, buffer and comamnd need to be set
-	 * before DecGetInitialInfo for MJPG.
-	 */
-	if(instance->userData.enable)
-	{
-		instance->userData.size = SIZE_USER_BUF;
-		instance->userData.addr = malloc(SIZE_USER_BUF);
-	}
 
-	if(instance->format == STD_MJPG)
+	if(dec->format == STD_MJPG)
 	{
-		ret = vpu_DecGiveCommand(handle, DEC_SET_REPORT_USERDATA, &(instance->userData));
+		ret = vpu_DecGiveCommand(handle, DEC_SET_REPORT_USERDATA, &dec->userData);
 		if(ret != RETCODE_SUCCESS)
 		{
+			fprintf(stderr, "Failed to set user data report, ret %d\n", ret);
 			return -1;
 		}
 	}
 
-	/* Parse bitstream and get width/height/framerate etc */
 	vpu_DecSetEscSeqInit(handle, 1);
 	ret = vpu_DecGetInitialInfo(handle, &initinfo);
 	vpu_DecSetEscSeqInit(handle, 0);
-	if(ret != RETCODE_SUCCESS)
+
+	if (ret != RETCODE_SUCCESS)
 	{
+		fprintf(stderr, "vpu_DecGetInitialInfo failed, ret:%d, errorcode:%d\n", ret, initinfo.errorcode);
 		return -1;
 	}
 
 	if(initinfo.streamInfoObtained)
 	{
-		switch(instance->format)
-		{
-		case STD_AVC:
-
-			if(initinfo.aspectRateInfo)
-			{
-				int aspect_ratio_idc;
-				int sar_width, sar_height;
-
-				if((initinfo.aspectRateInfo >> 16) == 0)
-				{
-					aspect_ratio_idc = (initinfo.aspectRateInfo & 0xFF);
-				}
-				else
-				{
-					sar_width = (initinfo.aspectRateInfo >> 16);
-					sar_height = (initinfo.aspectRateInfo & 0xFFFF);
-				}
-			}
-
-			break;
-		case STD_MJPG:
-			instance->mjpg_fmt = initinfo.mjpg_sourceFormat;
-			break;
-
-		default:
-			break;
-		}
+		if(dec->format == STD_MJPG)
+			dec->mjpg_fmt = initinfo.mjpg_sourceFormat;
 	}
 
+	dec->minFrameBufferCount = initinfo.minFrameBufferCount;
 
-#ifdef COMBINED_VIDEO_SUPPORT
-	/* Following lines are sample code to support minFrameBuffer counter
-	 changed in combined video stream. */
-	if (dec->cmdl->format == STD_AVC)
-	initinfo.minFrameBufferCount = 19;
-#endif
-	/*
-	 * We suggest to add two more buffers than minFrameBufferCount:
-	 *
-	 * vpu_DecClrDispFlag is used to control framebuffer whether can be
-	 * used for decoder again. One framebuffer dequeue from IPU is delayed
-	 * for performance improvement and one framebuffer is delayed for
-	 * display flag clear.
-	 *
-	 * Performance is better when more buffers are used if IPU performance
-	 * is bottleneck.
-	 *
-	 * Two more buffers may be needed for interlace stream from IPU DVI view
-	 */
-	instance->minFrameBufferCount = initinfo.minFrameBufferCount;
 	count = getenv("VPU_EXTENDED_BUFFER_COUNT");
 	if(count)
 		extended_fbcount = atoi(count);
 	else
 		extended_fbcount = 2;
 
-	if(initinfo.interlace)
-		instance->fbcount = initinfo.minFrameBufferCount + extended_fbcount + 2;
-	else
-		instance->fbcount = initinfo.minFrameBufferCount + extended_fbcount;
+	dec->fbcount = initinfo.minFrameBufferCount + extended_fbcount;
 
-	instance->picwidth = ((initinfo.picWidth + 15) & ~15);
-
+	dec->picwidth = ((initinfo.picWidth + 15) & ~15);
 	align = 16;
-	if((instance->format == STD_MPEG2 || instance->format == STD_VC1 || instance->format == STD_AVC) && initinfo.interlace == 1)
-		align = 32;
+	dec->picheight = ((initinfo.picHeight + align - 1) & ~(align - 1));
 
-	instance->picheight = ((initinfo.picHeight + align - 1) & ~(align - 1));
-
-#ifdef COMBINED_VIDEO_SUPPORT
-	/* Following lines are sample code to support resolution change
-	 from small to large in combined video stream. MAX_FRAME_WIDTH
-	 and MAX_FRAME_HEIGHT must be defined per user requirement. */
-	if (dec->picwidth < MAX_FRAME_WIDTH)
-	dec->picwidth = MAX_FRAME_WIDTH;
-	if (dec->picheight < MAX_FRAME_HEIGHT)
-	dec->picheight = MAX_FRAME_HEIGHT;
-#endif
-
-	fprintf(stderr, "W:%d, H:%d\n", instance->picwidth, instance->picheight);
-	if((instance->picwidth == 0) || (instance->picheight == 0))
+	if ((dec->picwidth == 0) || (dec->picheight == 0))
 		return -1;
 
-	/*
-	 * Information about H.264 decoder picture cropping rectangle which
-	 * presents the offset of top-left point and bottom-right point from
-	 * the origin of frame buffer.
-	 *
-	 * By using these four offset values, host application can easily
-	 * detect the position of target output window. When display cropping
-	 * is off, the cropping window size will be 0.
-	 *
-	 * This structure for cropping rectangles is only valid for H.264
-	 * decoder case.
-	 */
-
-	/* Add non-h264 crop support, assume left=top=0 */
-	if((instance->picwidth > initinfo.picWidth || instance->picheight > initinfo.picHeight)
+	if((dec->picwidth > initinfo.picWidth || dec->picheight > initinfo.picHeight)
 			&& (!initinfo.picCropRect.left && !initinfo.picCropRect.top && !initinfo.picCropRect.right
 					&& !initinfo.picCropRect.bottom))
 	{
@@ -477,41 +325,21 @@ static int decoder_parse(struct DecodingInstance* instance)
 		initinfo.picCropRect.bottom = initinfo.picHeight;
 	}
 
-	memcpy(&(instance->picCropRect), &(initinfo.picCropRect), sizeof(initinfo.picCropRect));
 
-	/* worstSliceSize is in kilo-byte unit */
-	instance->phy_slicebuf_size = initinfo.worstSliceSize * 1024;
-	instance->stride = instance->picwidth;
+	memcpy(&(dec->picCropRect), &(initinfo.picCropRect), sizeof(initinfo.picCropRect));
 
-	/* Allocate memory for frame status, Mb and Mv report */
-	if(instance->frameBufStat.enable)
-	{
-		instance->frameBufStat.addr = malloc(initinfo.reportBufSize.frameBufStatBufSize);
-	}
-	if(instance->mbInfo.enable)
-	{
-		instance->mbInfo.addr = malloc(initinfo.reportBufSize.mbInfoBufSize);
-	}
-	if(instance->mvInfo.enable)
-	{
-		instance->mvInfo.addr = malloc(initinfo.reportBufSize.mvInfoBufSize);
-	}
-
-	//info_msg("Display fps will be %d\n", instance->cmdl->fps);
+	dec->phy_slicebuf_size = initinfo.worstSliceSize * 1024;
+	dec->stride = dec->picwidth;
 
 	return 0;
 }
 
-static int decoder_allocate_framebuffer(struct DecodingInstance *instance)
+static int decoder_allocate_framebuffer(DecodingInstance dec)
 {
 	DecBufInfo bufinfo;
-	int i, fbcount = instance->fbcount, totalfb, img_size;
-//	int dst_scheme = instance->cmdl->dst_scheme, rot_en = instance->cmdl->rot_en;
-//	int deblock_en = instance->cmdl->deblock_en;
-//	int dering_en = instance->cmdl->dering_en;
-//	struct rot rotation = {};
+	int i, fbcount = dec->fbcount, totalfb, img_size;
 	RetCode ret;
-	DecHandle handle = instance->handle;
+	DecHandle handle = dec->handle;
 	FrameBuffer *fb;
 	struct frame_buf **pfbpool;
 	struct vpu_display *disp = NULL;
@@ -519,220 +347,182 @@ static int decoder_allocate_framebuffer(struct DecodingInstance *instance)
 	vpu_mem_desc *mvcol_md = NULL;
 	Rect rotCrop;
 
-//	rot_en = 0;
+	totalfb = fbcount + dec->extrafb;
 
-	/*
-	 * 1 extra fb for deblocking on MX32, no need extrafb for blocking on MX37 and MX51
-	 * dec->cmdl->deblock_en has been cleared to zero after set it to oparam.mp4DeblkEnable
-	 * in decoder_open() function on MX37 and MX51.
-	 */
-//	if(deblock_en)
-//	{
-//		instance->extrafb++;
-//	}
+	fb = dec->fb = calloc(totalfb, sizeof(FrameBuffer));
 
-	totalfb = fbcount + instance->extrafb;
+	pfbpool = dec->pfbpool = calloc(totalfb, sizeof(struct frame_buf *));
 
-	fb = instance->fb = calloc(totalfb, sizeof(FrameBuffer));
 
-	if(fb == NULL)
+	for(i = 0; i < totalfb; i++)
 	{
-		return -1;
-	}
-
-	pfbpool = instance->pfbpool = calloc(totalfb, sizeof(struct frame_buf *));
-	if(pfbpool == NULL)
-	{
-		free(instance->fb);
-
-		return -1;
-	}
-
-	//if(((dst_scheme != PATH_V4L2) && (dst_scheme != PATH_IPU)) || (((dst_scheme == PATH_V4L2) || (dst_scheme == PATH_IPU)) && deblock_en))
-	{
-
-		for(i = 0; i < totalfb; i++)
+		pfbpool[i] = framebuf_alloc(dec->format, dec->mjpg_fmt, dec->stride, dec->picheight);
+		if(pfbpool[i] == NULL)
 		{
-			pfbpool[i] = framebuf_alloc(instance->format, instance->mjpg_fmt, instance->stride, instance->picheight);
-			if(pfbpool[i] == NULL)
-			{
-				totalfb = i;
-				goto err;
-			}
-
-			fb[i].bufY = pfbpool[i]->addrY;
-			fb[i].bufCb = pfbpool[i]->addrCb;
-			fb[i].bufCr = pfbpool[i]->addrCr;
-			if(cpu_is_mx37() || cpu_is_mx5x())
-			{
-				fb[i].bufMvCol = pfbpool[i]->mvColBuf;
-			}
-		}
-	}
-
-//	if((dst_scheme == PATH_V4L2) || (dst_scheme == PATH_IPU))
-	{
-//		rotation.rot_en = 0;
-//		rotation.rot_angle = 0;
-
-//		if(dst_scheme == PATH_V4L2)
-//			disp = v4l_display_open(instance, totalfb, rotation, instance->picCropRect);
-//		else
-//			disp = ipu_display_open(instance, totalfb, rotation, instance->picCropRect);
-
-		if(disp == NULL)
-		{
+			totalfb = i;
 			goto err;
 		}
 
-		divX = (instance->mjpg_fmt == MODE420 || instance->mjpg_fmt == MODE422) ? 2 : 1;
-		divY = (instance->mjpg_fmt == MODE420 || instance->mjpg_fmt == MODE224) ? 2 : 1;
+		fb[i].bufY = pfbpool[i]->addrY;
+		fb[i].bufCb = pfbpool[i]->addrCb;
+		fb[i].bufCr = pfbpool[i]->addrCr;
+		fb[i].bufMvCol = pfbpool[i]->mvColBuf;
 
-//		if(deblock_en == 0)
-		{
-			img_size = instance->stride * instance->picheight;
-
-			mvcol_md = instance->mvcol_memdesc = calloc(totalfb, sizeof(vpu_mem_desc));
-
-			for(i = 0; i < totalfb; i++)
-			{
-//				if(dst_scheme == PATH_V4L2)
-//					fb[i].bufY = disp->buffers[i]->offset;
-//				else
-//					fb[i].bufY = disp->ipu_bufs[i].ipu_paddr;
-				fb[i].bufCb = fb[i].bufY + img_size;
-				fb[i].bufCr = fb[i].bufCb + (img_size / divX / divY);
-				/* allocate MvCol buffer here */
-				memset(&mvcol_md[i], 0, sizeof(vpu_mem_desc));
-				mvcol_md[i].size = img_size / divX / divY;
-				ret = IOGetPhyMem(&mvcol_md[i]);
-				if(ret)
-				{
-					goto err1;
-				}
-				fb[i].bufMvCol = mvcol_md[i].phy_addr;
-
-			}
-		}
 	}
 
-	stride = ((instance->stride + 15) & ~15);
-	bufinfo.avcSliceBufInfo.sliceSaveBuffer = instance->phy_slice_buf;
-	bufinfo.avcSliceBufInfo.sliceSaveBufferSize = instance->phy_slicebuf_size;
+	stride = ((dec->stride + 15) & ~15);
+	bufinfo.avcSliceBufInfo.sliceSaveBuffer = dec->phy_slice_buf;
+	bufinfo.avcSliceBufInfo.sliceSaveBufferSize = dec->phy_slicebuf_size;
 
-	/* User needs to fill max suported macro block value of frame as following*/
-	bufinfo.maxDecFrmInfo.maxMbX = instance->stride / 16;
-	bufinfo.maxDecFrmInfo.maxMbY = instance->picheight / 16;
-	bufinfo.maxDecFrmInfo.maxMbNum = instance->stride * instance->picheight / 256;
+	bufinfo.maxDecFrmInfo.maxMbX = dec->stride / 16;
+	bufinfo.maxDecFrmInfo.maxMbY = dec->picheight / 16;
+	bufinfo.maxDecFrmInfo.maxMbNum = dec->stride * dec->picheight / 256;
 	ret = vpu_DecRegisterFrameBuffer(handle, fb, fbcount, stride, &bufinfo);
+
 	if(ret != RETCODE_SUCCESS)
 	{
 		goto err1;
 	}
 
-	instance->disp = disp;
+	dec->disp = disp;
 	return 0;
 
-	err1:
-//	if(dst_scheme == PATH_V4L2)
-//	{
-//		v4l_display_close(disp);
-//		instance->disp = NULL;
-//	}
-//	else if(dst_scheme == PATH_IPU)
-//	{
-//		ipu_display_close(disp);
-//		instance->disp = NULL;
-//	}
+err1:
 
-	err:
+err:
+	for(i = 0; i < totalfb; i++)
+	{
+		framebuf_free(pfbpool[i]);
+	}
 
-//	if(((dst_scheme != PATH_V4L2) && (dst_scheme != PATH_IPU)) || ((dst_scheme == PATH_V4L2) && deblock_en))
-//	{
-//		for(i = 0; i < totalfb; i++)
-//		{
-//			framebuf_free(pfbpool[i]);
-//		}
-//	}
-//
-//	if(fpFrmStatusLogfile)
-//	{
-//		fclose(fpFrmStatusLogfile);
-//		fpFrmStatusLogfile = NULL;
-//	}
-//	if(fpErrMapLogfile)
-//	{
-//		fclose(fpErrMapLogfile);
-//		fpErrMapLogfile = NULL;
-//	}
-//	if(fpQpLogfile)
-//	{
-//		fclose(fpQpLogfile);
-//		fpQpLogfile = NULL;
-//	}
-//	if(fpSliceBndLogfile)
-//	{
-//		fclose(fpSliceBndLogfile);
-//		fpSliceBndLogfile = NULL;
-//	}
-//	if(fpMvLogfile)
-//	{
-//		fclose(fpMvLogfile);
-//		fpMvLogfile = NULL;
-//	}
-//	if(fpUserDataLogfile)
-//	{
-//		fclose(fpUserDataLogfile);
-//		fpUserDataLogfile = NULL;
-//	}
-
-	free(instance->fb);
-	free(instance->pfbpool);
-	instance->fb = NULL;
-	instance->pfbpool = NULL;
+	free(dec->fb);
+	free(dec->pfbpool);
+	dec->fb = NULL;
+	dec->pfbpool = NULL;
 	return -1;
 }
 
-
-int vpu_decode_one_frame(DecodingInstance instance)
+DecodingInstance vpu_create_decoding_instance(void* input, const InputType type, const int format)
 {
-	DecHandle handle = instance->handle;
-	DecOutputInfo outinfo =	{};
-	int rot_en, rot_stride, fwidth, fheight;
-//	int rot_angle = dec->cmdl->rot_angle;
-//	int deblock_en = dec->cmdl->deblock_en;
-//	int dering_en = dec->cmdl->dering_en;
-	FrameBuffer *deblock_fb = NULL;
-	FrameBuffer *fb = instance->fb;
-	struct frame_buf **pfbpool = instance->pfbpool;
-	struct frame_buf *pfb = NULL;
-	struct vpu_display *disp = instance->disp;
-	int err = 0, eos = 0, fill_end_bs = 0, decodefinish = 0;
-	struct timeval tdec_begin, tdec_end, total_start, total_end;
-	RetCode ret;
-	int sec, usec, loop_id;
-	u32 yuv_addr, img_size;
-	double tdec_time = 0, frame_id = 0, total_time = 0;
-	int decIndex = 0;
-	int rotid = 0, dblkid = 0, mirror;
-	int totalNumofErrMbs = 0;
-	int disp_clr_index = -1, actual_display_index = -1, field = V4L2_FIELD_NONE;
-	int is_waited_int = 0;
-	char *delay_ms, *endptr;
+	DecodingInstance dec = NULL;
+	DecParam decparam = {};
+	int rot_stride = 0, fwidth, fheight, rot_angle = 0, mirror = 0;
+	int rotid = 0;
+	int eos = 0, fill_end_bs = 0, fillsize = 0;
 
-	if(instance->type == MEMORYBLOCK && instance->buffer_size == 0) return -1;
-	img_size = instance->picwidth * instance->picheight;
-	ret = vpu_DecStartOneFrame(handle, &(instance->decparam));
+
+	dec = calloc(1, sizeof(struct DecodingInstance));
+
+	dec->mem_desc.size = STREAM_BUF_SIZE;
+	IOGetPhyMem(&dec->mem_desc);
+	IOGetVirtMem(&dec->mem_desc);
+
+	dec->phy_bsbuf_addr = dec->mem_desc.phy_addr;
+	dec->virt_bsbuf_addr = dec->mem_desc.virt_uaddr;
+	dec->reorderEnable = 1;
+	dec->format = format;
+
+	if(format == STD_AVC)
+	{
+		dec->ps_mem_desc.size = PS_SAVE_SIZE;
+		IOGetPhyMem(&(dec->ps_mem_desc));
+		dec->phy_ps_buf = dec->ps_mem_desc.phy_addr;
+	}
+
+	dec->type = type;
+	if(type == FILENAME)
+	{
+		dec->fd = open((char*)input, O_RDONLY);
+	}
+
+
+	decoder_open(dec);
+	dec_fill_bsbuffer(dec,
+				dec->virt_bsbuf_addr,
+			        (dec->virt_bsbuf_addr + STREAM_BUF_SIZE),
+				dec->phy_bsbuf_addr, fillsize, &eos, &fill_end_bs);
+	decoder_parse(dec);
+
+	if(format == STD_AVC)
+	{
+		dec->slice_mem_desc.size = dec->phy_slicebuf_size;
+		IOGetPhyMem(&(dec->slice_mem_desc));
+		dec->phy_slice_buf = dec->slice_mem_desc.phy_addr;
+	}
+
+	decoder_allocate_framebuffer(dec);
+
+
+	if(dec->format == STD_MJPG)
+		rotid = 0;
+
+	decparam.dispReorderBuf = 0;
+	decparam.prescanEnable = 0;
+	decparam.prescanMode = 0;
+	decparam.skipframeMode = 0;
+	decparam.skipframeNum = 0;
+	decparam.iframeSearchEnable = 0;
+
+	fwidth = ((dec->picwidth + 15) & ~15);
+	fheight = ((dec->picheight + 15) & ~15);
+
+	if(dec->format == STD_MJPG)
+	{
+		vpu_DecGiveCommand(dec->handle, SET_ROTATION_ANGLE, &rot_angle);
+		vpu_DecGiveCommand(dec->handle, SET_MIRROR_DIRECTION, &mirror);
+		rot_stride = fwidth;
+		vpu_DecGiveCommand(dec->handle, SET_ROTATOR_STRIDE, &rot_stride);
+	}
+
+	//img_size = dec->picwidth * dec->picheight * 3 / 2;
+
+	return dec;
+}
+
+int vpu_decode_one_frame(DecodingInstance dec, unsigned char* output)
+{
+	DecHandle handle = dec->handle;
+	FrameBuffer *fb = dec->fb;
+	DecOutputInfo outinfo = {};
+	int rotid = 0;
+	int ret;
+	int is_waited_int;
+	int loop_id;
+	double frame_id = 0;
+	int disp_clr_index = -1, actual_display_index = -1;
+	struct frame_buf **pfbpool = dec->pfbpool;
+	struct frame_buf *pfb = NULL;
+	u32 yuv_addr, img_size = dec->picwidth * dec->picheight * 2;
+	int decIndex = 0;
+	int err = 0, eos = 0, fill_end_bs = 0, decodefinish = 0;
+
+	if(dec->format == STD_MJPG)
+	{
+		vpu_DecGiveCommand(handle, SET_ROTATOR_OUTPUT, (void *)&fb[rotid]);
+	}
+
+	ret = vpu_DecStartOneFrame(handle, &(dec->decparam));
+
+	if(ret != RETCODE_SUCCESS)
+	{
+		fputs("DecStartOneFrame failed\n", stderr);
+		return -1;
+	}
 
 	is_waited_int = 0;
 	loop_id = 0;
 
 	while(vpu_IsBusy())
 	{
-		err = dec_fill_bsbuffer(instance, STREAM_FILL_SIZE, &eos, &fill_end_bs);
+		err = dec_fill_bsbuffer(dec,
+			      dec->virt_bsbuf_addr,
+			      (dec->virt_bsbuf_addr + STREAM_BUF_SIZE),
+			      dec->phy_bsbuf_addr, STREAM_FILL_SIZE,
+			      &eos, &fill_end_bs);
 
 		if(err < 0)
 		{
+			fputs("dec_fill_bsbuffer failed\n", stderr);
 			return -1;
 		}
 
@@ -753,33 +543,36 @@ int vpu_decode_one_frame(DecodingInstance instance)
 	if(!is_waited_int)
 		vpu_WaitForInt(500);
 
-
 	ret = vpu_DecGetOutputInfo(handle, &outinfo);
 
-	if((instance->format == STD_MJPG) && (outinfo.indexFrameDisplay == 0))
+	if((dec->format == STD_MJPG) && (outinfo.indexFrameDisplay == 0))
 	{
 		outinfo.indexFrameDisplay = rotid;
 	}
 
-	fprintf(stderr, "frame_id = %d\n", (int)frame_id);
+	dprintf(4, "frame_id = %d\n", (int)frame_id);
 	if(ret != RETCODE_SUCCESS)
 	{
+		fprintf(stderr, "vpu_DecGetOutputInfo failed Err code is %d\n\tframe_id = %d\n", ret, (int)frame_id);
 		return -1;
 	}
 
-	if(outinfo.indexFrameDecoded >= 0)
+	if(outinfo.decodingSuccess == 0)
 	{
-		if((instance->format == STD_AVC) || (instance->format == STD_MPEG4))
-		{
-			if((outinfo.interlacedFrame))
-			{
-				if(outinfo.topFieldFirst)
-					field = V4L2_FIELD_INTERLACED_TB;
-				else
-					field = V4L2_FIELD_INTERLACED_BT;
-				fprintf(stderr, "Top Field First flag: %d, dec_idx %d\n", outinfo.topFieldFirst, decIndex);
-			}
-		}
+		fprintf(stderr, "Incomplete finish of decoding process.\n\tframe_id = %d\n", (int)frame_id);
+		return 0;
+	}
+
+	if(outinfo.notSufficientPsBuffer)
+	{
+		fputs("PS Buffer overflow\n", stderr);
+		return -1;
+	}
+
+	if(outinfo.notSufficientSliceBuffer)
+	{
+		fputs("Slice Buffer overflow\n", stderr);
+		return -1;
 	}
 
 	if(outinfo.indexFrameDecoded >= 0)
@@ -787,107 +580,50 @@ int vpu_decode_one_frame(DecodingInstance instance)
 
 	if(outinfo.indexFrameDisplay == -1)
 		decodefinish = 1;
-	else if((outinfo.indexFrameDisplay > instance->fbcount) && (outinfo.prescanresult != 0))
+	else if((outinfo.indexFrameDisplay > dec->fbcount) && (outinfo.prescanresult != 0))
 		decodefinish = 1;
 
-
-	actual_display_index = outinfo.indexFrameDisplay;
-
-
-	if(err)
+	if(decodefinish)
 		return -1;
 
-	if(outinfo.numOfErrMBs)
+	if((outinfo.indexFrameDisplay == -3) || (outinfo.indexFrameDisplay == -2))
 	{
-		totalNumofErrMbs += outinfo.numOfErrMBs;
+		dprintf(3, "VPU doesn't have picture to be displayed.\n\toutinfo.indexFrameDisplay = %d\n", outinfo.indexFrameDisplay);
+
+		if(dec->format != STD_MJPG && disp_clr_index >= 0)
+		{
+			err = vpu_DecClrDispFlag(handle, disp_clr_index);
+			if(err)
+				fprintf(stderr, "vpu_DecClrDispFlag failed Error code %d\n", err);
+		}
+		disp_clr_index = outinfo.indexFrameDisplay;
+
+		return 0;
 	}
 
-	frame_id++;
-
-	delay_ms = getenv("VPU_DECODER_DELAY_MS");
-	if(delay_ms && strtol(delay_ms, &endptr, 10))
-		usleep(strtol(delay_ms, &endptr, 10) * 1000);
+	if(dec->format == STD_MJPG)
+		actual_display_index = rotid;
+	else
+		actual_display_index = outinfo.indexFrameDisplay;
 
 
 	pfb = pfbpool[actual_display_index];
 
-
 	yuv_addr = pfb->addrY + pfb->desc.virt_uaddr - pfb->desc.phy_addr;
 
-	return yuv_addr;
-}
+	//write_to_file(dec, (u8 *)yuv_addr, dec->picCropRect);
+	memcpy(output, (unsigned char*)yuv_addr, img_size);
 
-DecodingInstance vpu_create_decoding_instance(void* input, const InputType type, const int format)
-{
-	DecodingInstance instance = NULL;
-	int ret, eos = 0, fill_end_bs = 0, fillsize = 0;
-	DecParam decparam = {};
-
-	instance = calloc(1, sizeof(struct DecodingInstance));
-	instance->mem_desc.size = STREAM_BUF_SIZE;
-	ret = IOGetPhyMem(&(instance->mem_desc));
-
-	IOGetVirtMem(&(instance->mem_desc));
-
-	instance->phy_bsbuf_addr = instance->mem_desc.phy_addr;
-	instance->virt_bsbuf_addr = instance->mem_desc.virt_uaddr;
-
-	instance->reorderEnable = 1;
-
-	instance->userData.enable = 0;
-	instance->mbInfo.enable = 0;
-	instance->mvInfo.enable = 0;
-	instance->frameBufStat.enable = 0;
-
-	if(format == STD_AVC)
+	if(dec->format != STD_MJPG && disp_clr_index >= 0)
 	{
-		instance->ps_mem_desc.size = PS_SAVE_SIZE;
-		ret = IOGetPhyMem(&(instance->ps_mem_desc));
-		instance->phy_ps_buf = instance->ps_mem_desc.phy_addr;
+		err = vpu_DecClrDispFlag(handle, disp_clr_index);
+		if(err)
+			fprintf(stderr, "vpu_DecClrDispFlag failed Error code %d\n", err);
 	}
 
-	instance->format = format;
-	instance->type = type;
+	disp_clr_index = outinfo.indexFrameDisplay;
 
-	if(type == FILENAME)
-	{
-		instance->fd = open((const char*)input, O_RDONLY);
-		instance->data_filler = data_fill_from_file;
-	}else if(type == MEMORYBLOCK)
-	{
-		instance->buffer = (unsigned char*)input;
-		instance->buffer_size = 100000;
-		instance->data_filler = data_fill_from_memory;
-	}
-
-
-	ret = decoder_open(instance);
-	ret = dec_fill_bsbuffer(instance, fillsize, &eos, &fill_end_bs);
-	ret = decoder_parse(instance);
-
-	if(format == STD_AVC)
-	{
-		instance->slice_mem_desc.size = instance->phy_slicebuf_size;
-		ret = IOGetPhyMem(&(instance->slice_mem_desc));
-		instance->phy_slice_buf = instance->slice_mem_desc.phy_addr;
-	}
-
-	ret = decoder_allocate_framebuffer(instance);
-
-
-	decparam.dispReorderBuf = 0;
-	decparam.prescanEnable = 0;
-	decparam.prescanMode = 0;
-	decparam.skipframeMode = 0;
-	decparam.skipframeNum = 0;
-	decparam.iframeSearchEnable = 0;
-
-
-	return instance;
+	frame_id++;
+	return 0;
 }
 
-void vpu_set_input_buffer_size(DecodingInstance instance, const size_t size)
-{
-	if(instance->type != MEMORYBLOCK) return;
-	instance->buffer_size = size;
-}

@@ -99,7 +99,10 @@ struct frame_buf *framebuf_alloc(int stdMode, int format, int strideY, int heigh
 
 	if(cpu_is_mx37() || cpu_is_mx5x())
 	{
-		fb->mvColBuf = fb->addrCr + strideY / divX * height / divY;
+		if(stdMode == STD_MJPG)
+			fb->mvColBuf = fb->addrCr;
+		else
+			fb->mvColBuf = fb->addrCr + strideY / divX * height / divY;
 	}
 
 	fb->desc.virt_uaddr = IOGetVirtMem(&(fb->desc));
