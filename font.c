@@ -139,3 +139,33 @@ void text_layout_copy_to_yuv422(const text_layout layout, const int x, const int
 		}
 	}
 }
+
+void text_layout_copy_to_yuv422p(const text_layout layout, const int x, const int y, unsigned char* image, const int img_w, const int img_h)
+{
+	int i,j;
+	unsigned char* src;
+	unsigned char* destY;
+	unsigned char* destUV;
+
+
+	if(!layout||!layout->surface_data) return;
+
+	for(i = 0; i < layout->height; ++i)
+	{
+		src = &(layout->surface_data[layout->width * i]);
+		destY = &(image[img_w * (y + i) + x]);
+		destUV = &(image[img_w * img_h + img_w / 2 * (y / 2 + i / 2) * 2 + x / 2 * 2]);
+
+		for(j = 0; j < layout->width; ++j)
+		{
+			if(x + j >= img_w) break;
+			if(src[j])
+			{
+				destY[j] = src[j];
+				destUV[j / 2 * 2] = -128;
+				destUV[j / 2 * 2 + 1] = -128;
+			}
+		}
+	}
+}
+

@@ -66,5 +66,16 @@ void text_layout_copy_to_yuv420p(const text_layout layout, const int x, const in
  */
 void text_layout_copy_to_yuv422(const text_layout layout, const int x, const int y, unsigned char* image, const int img_w, const int img_h);
 
+/**
+ * @brief Write data in internal buffer to existed yuv422p surface.
+ * @param layout Target text layout object that contains rendered image
+ * @param x X coordinate of output image
+ * @param y Y coordinate of output image
+ * @param image Pointer to output image
+ * @param img_w width of output image
+ * @param img_h height of output image
+ */
+void text_layout_copy_to_yuv422p(const text_layout layout, const int x, const int y, unsigned char* image, const int img_w, const int img_h);
+
 
 #endif /* FONT_H_ */
