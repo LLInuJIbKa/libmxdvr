@@ -11,8 +11,8 @@
 #define DEVICE_NODE	"/dev/video0"
 #define TTY_PATH	"/dev/tty0"
 #define OUTPUT_MP4_FILENAME	"test.mp4"
-#define CAPTURE_WIDTH	(640)
-#define CAPTURE_HEIGHT	(480)
+#define CAPTURE_WIDTH	(1280)
+#define CAPTURE_HEIGHT	(720)
 
 #define DISPLAY_WIDTH	(1024)
 #define DISPLAY_HEIGHT	(768)
@@ -33,6 +33,7 @@ int main(int argc, char **argv)
 	struct timeval tv = { 0L, 0L };
 	fd_set fds;
 	EncodingInstance encoding = NULL;
+	DecodingInstance decoding = NULL;
 
 
 	fb_wakeup(TTY_PATH);
@@ -42,7 +43,7 @@ int main(int argc, char **argv)
 	v4l2dev_init(device, CAPTURE_WIDTH, CAPTURE_HEIGHT, 4);
 
 	rgb_buffer = calloc(1, DISPLAY_WIDTH * DISPLAY_HEIGHT * 2);
-	ipu_handle = ipu_init(CAPTURE_WIDTH, CAPTURE_HEIGHT, IPU_PIX_FMT_YUV420P, DISPLAY_WIDTH, DISPLAY_HEIGHT, IPU_PIX_FMT_RGB565, 1);
+	ipu_handle = ipu_init(CAPTURE_WIDTH, CAPTURE_HEIGHT, IPU_PIX_FMT_YUV422P, DISPLAY_WIDTH, DISPLAY_HEIGHT, IPU_PIX_FMT_RGB565, 1);
 	ipu_query_task();
 
 	vpu_init();
@@ -53,36 +54,36 @@ int main(int argc, char **argv)
 	puts("Press Enter key to exit ...");
 
 
-	encoding = vpu_create_encoding_instance(CAPTURE_WIDTH, CAPTURE_HEIGHT, OUTPUT_MP4_FILENAME);
+	//encoding = vpu_create_encoding_instance(CAPTURE_WIDTH, CAPTURE_HEIGHT, OUTPUT_MP4_FILENAME);
 
+	buffer = calloc(1, CAPTURE_WIDTH * CAPTURE_HEIGHT * 4);
+	decoding = vpu_create_decoding_instance_for_v4l2(device);
 
 	for(i = 0;; ++i)
 	{
 		/* Read RAW image from V4L2 device */
 
-		buffer = v4l2dev_read(device);
-		if(!buffer) continue;
-
+		vpu_decode_one_frame(decoding, buffer);
 
 		/* Update text image every second */
 
-		if(i == FRAME_PER_SECOND)
-		{
-			i = 0;
-			time(&rawtime);
-			timeinfo = localtime(&rawtime);
-			strftime(timestring, 255, "%p %l:%M:%S %Y/%m/%d", timeinfo);
-			text_layout_render_markup_text(text, timestring);
-		}
+//		if(i == FRAME_PER_SECOND)
+//		{
+//			i = 0;
+//			time(&rawtime);
+//			timeinfo = localtime(&rawtime);
+//			strftime(timestring, 255, "%p %l:%M:%S %Y/%m/%d", timeinfo);
+//			text_layout_render_markup_text(text, timestring);
+//		}
 
 
-		text_layout_copy_to_yuv420p(text, 360, 400, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
+		//text_layout_copy_to_yuv420p(text, 360, 400, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
 		//text_layout_copy_to_yuv422(text, 360, 400, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
 
 
 		/* Use VPU to encode H.264 stream */
 
-		vpu_encode_one_frame(encoding, buffer);
+		//vpu_encode_one_frame(encoding, buffer);
 
 
 		/* Use IPU to display RGB565 image */
@@ -91,13 +92,13 @@ int main(int argc, char **argv)
 
 
 		/* Detect ENTER key */
-
+		//usleep(100000);
 		FD_ZERO(&fds);
 		FD_SET(0, &fds);
 		if(select(1, &fds, NULL, NULL, &tv) > 0) break;
 	}
 
-	vpu_close_encoding_instance(&encoding);
+	//vpu_close_encoding_instance(&encoding);
 
 	/* Consume stdin */
 

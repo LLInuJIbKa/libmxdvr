@@ -15,7 +15,7 @@
 #define PS_SAVE_SIZE		(0x080000)
 #define STREAM_END_SIZE		(0)
 #define SIZE_USER_BUF		(0x1000)
-#define STREAM_FILL_SIZE	(0x40000)
+#define STREAM_FILL_SIZE	(0x10000)
 
 typedef unsigned long u32;
 typedef unsigned short u16;
@@ -56,15 +56,14 @@ struct DecodingInstance
 	vpu_mem_desc slice_mem_desc;
 
 
-	InputType type;
-	int format;
+	v4l2dev device;
 	int fps;
 	DecParam decparam;
 
 
 	int fd;
 
-	unsigned char* buffer;
+	volatile unsigned char* buffer;
 	int buffer_size;
 	int buffer_read_position;
 
@@ -105,10 +104,7 @@ static int vpu_read(int fd, char *buf, int n)
 }
 
 
-static int dec_fill_bsbuffer(DecodingInstance dec,
-		u32 bs_va_startaddr, u32 bs_va_endaddr,
-		u32 bs_pa_startaddr, int defaultsize,
-		int *eos, int *fill_end_bs)
+static int dec_fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *fill_end_bs)
 {
 	RetCode ret;
 	DecHandle handle = dec->handle;
@@ -116,6 +112,9 @@ static int dec_fill_bsbuffer(DecodingInstance dec,
 	u32 target_addr, space;
 	int size;
 	int nread, room;
+	u32 bs_va_startaddr = dec->virt_bsbuf_addr;
+	u32 bs_va_endaddr = dec->virt_bsbuf_addr + STREAM_BUF_SIZE;
+	u32 bs_pa_startaddr = dec->phy_bsbuf_addr;
 	*eos = 0;
 
 	ret = vpu_DecGetBitstreamBuffer(handle, &pa_read_ptr, &pa_write_ptr, &space);
@@ -235,6 +234,95 @@ static int dec_fill_bsbuffer(DecodingInstance dec,
 	return nread;
 }
 
+static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *fill_end_bs)
+{
+	RetCode ret = 0;
+	DecHandle handle = dec->handle;
+	PhysicalAddress pa_read_ptr, pa_write_ptr;
+	u32 target_addr;
+	int size, n;
+	int nread, room;
+	u32 bs_va_startaddr = dec->virt_bsbuf_addr;
+	u32 bs_va_endaddr = dec->virt_bsbuf_addr + STREAM_BUF_SIZE;
+	u32 bs_pa_startaddr = dec->phy_bsbuf_addr;
+	static u32 space = 0;
+	*eos = 0;
+
+	ret = vpu_DecGetBitstreamBuffer(handle, &pa_read_ptr, &pa_write_ptr, &space);
+
+	target_addr = bs_va_startaddr + (pa_write_ptr - bs_pa_startaddr);
+
+
+	/* Decoder bitstream buffer is empty */
+	if(space <= 0)
+		return 0;
+
+
+	fprintf(stderr, "Space: %d\n", space);
+	size = 0;
+	while(space>0)
+	{
+		nread = v4l2dev_read(dec->device, dec->buffer);
+
+		if(nread>space)
+		{
+			if(size == 0)
+			{
+				fputs("Go die\n", stderr);
+				return 0;
+			}
+			else break;
+		}
+
+
+		if((target_addr + nread) > bs_va_endaddr)
+		{
+			room = bs_va_endaddr - target_addr;
+			memcpy((void*)target_addr, dec->buffer, room);
+			memcpy((void*)bs_va_startaddr, dec->buffer+room, nread - room);
+			//fprintf(stderr, "v4l2dev_read: %d + %d = %d bytes\n", room, nread - room, nread);
+		}
+		else
+		{
+			memcpy((void*)target_addr, dec->buffer, nread);
+			//fprintf(stderr, "v4l2dev_read: %d bytes\n", nread);
+		}
+
+		target_addr += nread;
+		space -= nread;
+		size += nread;
+	}
+
+
+
+	update: if(*eos == 0)
+	{
+		ret = vpu_DecUpdateBitstreamBuffer(handle, size);
+		fprintf(stderr, "vpu_DecUpdateBitstreamBuffer:%d\n", size);
+		if(ret != RETCODE_SUCCESS)
+		{
+			fprintf(stderr, "vpu_DecUpdateBitstreamBuffer failed: %d\n", size);
+			return -1;
+		}
+		*fill_end_bs = 0;
+	}
+	else
+	{
+		if(!*fill_end_bs)
+		{
+			ret = vpu_DecUpdateBitstreamBuffer(handle, STREAM_END_SIZE);
+			if(ret != RETCODE_SUCCESS)
+			{
+				fputs("vpu_DecUpdateBitstreamBuffer failed\n", stderr);
+				return -1;
+			}
+			*fill_end_bs = 1;
+		}
+
+	}
+
+	return nread;
+}
 
 static int decoder_open(DecodingInstance dec)
 {
@@ -242,7 +330,7 @@ static int decoder_open(DecodingInstance dec)
 	DecHandle handle = NULL;
 	DecOpenParam oparam = {};
 
-	oparam.bitstreamFormat = dec->format;
+	oparam.bitstreamFormat = STD_MJPG;
 	oparam.bitstreamBuffer = dec->phy_bsbuf_addr;
 	oparam.bitstreamBufferSize = STREAM_BUF_SIZE;
 	oparam.reorderEnable = dec->reorderEnable;
@@ -272,15 +360,13 @@ static int decoder_parse(DecodingInstance dec)
 	char *count;
 
 
-	if(dec->format == STD_MJPG)
+	ret = vpu_DecGiveCommand(handle, DEC_SET_REPORT_USERDATA, &dec->userData);
+	if(ret != RETCODE_SUCCESS)
 	{
-		ret = vpu_DecGiveCommand(handle, DEC_SET_REPORT_USERDATA, &dec->userData);
-		if(ret != RETCODE_SUCCESS)
-		{
-			fprintf(stderr, "Failed to set user data report, ret %d\n", ret);
-			return -1;
-		}
+		fprintf(stderr, "Failed to set user data report, ret %d\n", ret);
+		return -1;
 	}
+
 
 	vpu_DecSetEscSeqInit(handle, 1);
 	ret = vpu_DecGetInitialInfo(handle, &initinfo);
@@ -294,8 +380,7 @@ static int decoder_parse(DecodingInstance dec)
 
 	if(initinfo.streamInfoObtained)
 	{
-		if(dec->format == STD_MJPG)
-			dec->mjpg_fmt = initinfo.mjpg_sourceFormat;
+		dec->mjpg_fmt = initinfo.mjpg_sourceFormat;
 	}
 
 	dec->minFrameBufferCount = initinfo.minFrameBufferCount;
@@ -356,7 +441,7 @@ static int decoder_allocate_framebuffer(DecodingInstance dec)
 
 	for(i = 0; i < totalfb; i++)
 	{
-		pfbpool[i] = framebuf_alloc(dec->format, dec->mjpg_fmt, dec->stride, dec->picheight);
+		pfbpool[i] = framebuf_alloc(STD_MJPG, dec->mjpg_fmt, dec->stride, dec->picheight);
 		if(pfbpool[i] == NULL)
 		{
 			totalfb = i;
@@ -402,7 +487,7 @@ err:
 	return -1;
 }
 
-DecodingInstance vpu_create_decoding_instance(void* input, const InputType type, const int format)
+DecodingInstance vpu_create_decoding_instance_for_v4l2(v4l2dev device)
 {
 	DecodingInstance dec = NULL;
 	DecParam decparam = {};
@@ -420,41 +505,17 @@ DecodingInstance vpu_create_decoding_instance(void* input, const InputType type,
 	dec->phy_bsbuf_addr = dec->mem_desc.phy_addr;
 	dec->virt_bsbuf_addr = dec->mem_desc.virt_uaddr;
 	dec->reorderEnable = 1;
-	dec->format = format;
-
-	if(format == STD_AVC)
-	{
-		dec->ps_mem_desc.size = PS_SAVE_SIZE;
-		IOGetPhyMem(&(dec->ps_mem_desc));
-		dec->phy_ps_buf = dec->ps_mem_desc.phy_addr;
-	}
-
-	dec->type = type;
-	if(type == FILENAME)
-	{
-		dec->fd = open((char*)input, O_RDONLY);
-	}
-
+	dec->device = device;
+	dec->buffer = calloc(1, 262144);
 
 	decoder_open(dec);
-	dec_fill_bsbuffer(dec,
-				dec->virt_bsbuf_addr,
-			        (dec->virt_bsbuf_addr + STREAM_BUF_SIZE),
-				dec->phy_bsbuf_addr, fillsize, &eos, &fill_end_bs);
+	//dec_fill_bsbuffer(dec, fillsize, &eos, &fill_end_bs);
+	fill_bsbuffer(dec, 1, &eos, &fill_end_bs);
 	decoder_parse(dec);
-
-	if(format == STD_AVC)
-	{
-		dec->slice_mem_desc.size = dec->phy_slicebuf_size;
-		IOGetPhyMem(&(dec->slice_mem_desc));
-		dec->phy_slice_buf = dec->slice_mem_desc.phy_addr;
-	}
 
 	decoder_allocate_framebuffer(dec);
 
-
-	if(dec->format == STD_MJPG)
-		rotid = 0;
+	rotid = 0;
 
 	decparam.dispReorderBuf = 0;
 	decparam.prescanEnable = 0;
@@ -465,14 +526,12 @@ DecodingInstance vpu_create_decoding_instance(void* input, const InputType type,
 
 	fwidth = ((dec->picwidth + 15) & ~15);
 	fheight = ((dec->picheight + 15) & ~15);
+	rot_stride = fwidth;
 
-	if(dec->format == STD_MJPG)
-	{
-		vpu_DecGiveCommand(dec->handle, SET_ROTATION_ANGLE, &rot_angle);
-		vpu_DecGiveCommand(dec->handle, SET_MIRROR_DIRECTION, &mirror);
-		rot_stride = fwidth;
-		vpu_DecGiveCommand(dec->handle, SET_ROTATOR_STRIDE, &rot_stride);
-	}
+	vpu_DecGiveCommand(dec->handle, SET_ROTATION_ANGLE, &rot_angle);
+	vpu_DecGiveCommand(dec->handle, SET_MIRROR_DIRECTION, &mirror);
+	vpu_DecGiveCommand(dec->handle, SET_ROTATOR_STRIDE, &rot_stride);
+
 
 	//img_size = dec->picwidth * dec->picheight * 3 / 2;
 
@@ -496,10 +555,7 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char* output)
 	int decIndex = 0;
 	int err = 0, eos = 0, fill_end_bs = 0, decodefinish = 0;
 
-	if(dec->format == STD_MJPG)
-	{
-		vpu_DecGiveCommand(handle, SET_ROTATOR_OUTPUT, (void *)&fb[rotid]);
-	}
+	vpu_DecGiveCommand(handle, SET_ROTATOR_OUTPUT, (void *)&fb[rotid]);
 
 	ret = vpu_DecStartOneFrame(handle, &(dec->decparam));
 
@@ -514,12 +570,8 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char* output)
 
 	while(vpu_IsBusy())
 	{
-		err = dec_fill_bsbuffer(dec,
-			      dec->virt_bsbuf_addr,
-			      (dec->virt_bsbuf_addr + STREAM_BUF_SIZE),
-			      dec->phy_bsbuf_addr, STREAM_FILL_SIZE,
-			      &eos, &fill_end_bs);
-
+		//err = dec_fill_bsbuffer(dec, STREAM_FILL_SIZE, &eos, &fill_end_bs);
+		err = fill_bsbuffer(dec, 0, &eos, &fill_end_bs);
 		if(err < 0)
 		{
 			fputs("dec_fill_bsbuffer failed\n", stderr);
@@ -534,18 +586,18 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char* output)
 
 		if(!err)
 		{
-			vpu_WaitForInt(500);
+			vpu_WaitForInt(50);
 			is_waited_int = 1;
 			loop_id++;
 		}
 	}
 
 	if(!is_waited_int)
-		vpu_WaitForInt(500);
+		vpu_WaitForInt(50);
 
 	ret = vpu_DecGetOutputInfo(handle, &outinfo);
 
-	if((dec->format == STD_MJPG) && (outinfo.indexFrameDisplay == 0))
+	if(outinfo.indexFrameDisplay == 0)
 	{
 		outinfo.indexFrameDisplay = rotid;
 	}
@@ -590,22 +642,12 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char* output)
 	{
 		dprintf(3, "VPU doesn't have picture to be displayed.\n\toutinfo.indexFrameDisplay = %d\n", outinfo.indexFrameDisplay);
 
-		if(dec->format != STD_MJPG && disp_clr_index >= 0)
-		{
-			err = vpu_DecClrDispFlag(handle, disp_clr_index);
-			if(err)
-				fprintf(stderr, "vpu_DecClrDispFlag failed Error code %d\n", err);
-		}
 		disp_clr_index = outinfo.indexFrameDisplay;
 
 		return 0;
 	}
 
-	if(dec->format == STD_MJPG)
-		actual_display_index = rotid;
-	else
-		actual_display_index = outinfo.indexFrameDisplay;
-
+	actual_display_index = rotid;
 
 	pfb = pfbpool[actual_display_index];
 
@@ -614,12 +656,6 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char* output)
 	//write_to_file(dec, (u8 *)yuv_addr, dec->picCropRect);
 	memcpy(output, (unsigned char*)yuv_addr, img_size);
 
-	if(dec->format != STD_MJPG && disp_clr_index >= 0)
-	{
-		err = vpu_DecClrDispFlag(handle, disp_clr_index);
-		if(err)
-			fprintf(stderr, "vpu_DecClrDispFlag failed Error code %d\n", err);
-	}
 
 	disp_clr_index = outinfo.indexFrameDisplay;
 

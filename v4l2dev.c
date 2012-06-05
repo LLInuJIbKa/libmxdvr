@@ -102,7 +102,7 @@ static int xioctl (int fd, int request, void* arg)
 
 	do
 	{
-		usleep(1000);
+		usleep(0);
 		r = ioctl(fd, request, arg);
 	}
 	while(-1 == r && EINTR == errno);
@@ -275,14 +275,14 @@ size_t v4l2dev_get_buffersize(v4l2dev device)
 	return device->buffer_size*3/4;
 }
 
-unsigned char* v4l2dev_read(v4l2dev device)
+int v4l2dev_read(v4l2dev device, unsigned char* output)
 {
 	fd_set fds;
 	struct timeval tv;
 	struct v4l2_buffer buf;
-	int result;
+	int result, size;
 
-	if(!is_valid_v4l2dev(device)) return NULL;
+	if(!is_valid_v4l2dev(device)) return -1;
 
 	FD_ZERO(&fds);
 	FD_SET(device->fd, &fds);
@@ -322,20 +322,25 @@ unsigned char* v4l2dev_read(v4l2dev device)
 			}else return NULL;
 		}
 
+		size = buf.bytesused;
+
 #ifdef USE_FMT_MJPG
-		jpeg_to_raw(device->mmap_buffers[buf.index], buf.bytesused, device->buffer);
+
+		memcpy(output, device->mmap_buffers[buf.index], buf.bytesused);
+		//jpeg_to_raw(device->mmap_buffers[buf.index], buf.bytesused, device->buffer);
+
 #else
 #ifdef	SOFTWARE_YUV422_TO_YUV420
-		convert_yuv422_to_yuv420(device->mmap_buffers[buf.index], device->buffer, device->width, device->height);
+		convert_yuv422_to_yuv420(device->mmap_buffers[buf.index], output, device->width, device->height);
 #else
-		ipu_buffer_update(device->ipu_handle, device->mmap_buffers[buf.index], device->buffer);
+		ipu_buffer_update(device->ipu_handle, device->mmap_buffers[buf.index], output);
 #endif
 #endif
 		/* Unlock */
 		result = xioctl(device->fd, VIDIOC_QBUF, &buf);
 
-		return device->buffer;
+		return size;
 	}
-	return NULL;
+	return -1;
 }
 

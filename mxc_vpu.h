@@ -6,6 +6,7 @@
 #define MXC_VPU_H_
 
 #include "vpu_lib.h"
+#include "v4l2dev.h"
 
 typedef struct EncodingInstance* EncodingInstance;
 typedef struct DecodingInstance* DecodingInstance;
@@ -49,8 +50,7 @@ int vpu_encode_one_frame(EncodingInstance instance, const unsigned char* data);
 void vpu_close_encoding_instance(EncodingInstance* instance);
 
 
-DecodingInstance vpu_create_decoding_instance(void* input, const InputType type, const int format);
-void vpu_set_input_buffer_size(DecodingInstance instance, const size_t size);
+DecodingInstance vpu_create_decoding_instance_for_v4l2(v4l2dev device);
 int vpu_decode_one_frame(DecodingInstance instance, unsigned char* output);
 
 #endif /* MXC_VPU_H_ */
