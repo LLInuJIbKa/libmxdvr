@@ -241,11 +241,11 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 	PhysicalAddress pa_read_ptr, pa_write_ptr;
 	u32 target_addr;
 	int size, n;
-	int nread, room;
+	unsigned int nread, room;
 	u32 bs_va_startaddr = dec->virt_bsbuf_addr;
 	u32 bs_va_endaddr = dec->virt_bsbuf_addr + STREAM_BUF_SIZE;
 	u32 bs_pa_startaddr = dec->phy_bsbuf_addr;
-	static u32 space = 0;
+	u32 space = 0;
 	*eos = 0;
 
 	ret = vpu_DecGetBitstreamBuffer(handle, &pa_read_ptr, &pa_write_ptr, &space);
@@ -258,7 +258,6 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 		return 0;
 
 
-	fprintf(stderr, "Space: %d\n", space);
 	size = 0;
 	while(space>0)
 	{
@@ -268,7 +267,6 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 		{
 			if(size == 0)
 			{
-				fputs("Go die\n", stderr);
 				return 0;
 			}
 			else break;
@@ -298,7 +296,6 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 	update: if(*eos == 0)
 	{
 		ret = vpu_DecUpdateBitstreamBuffer(handle, size);
-		fprintf(stderr, "vpu_DecUpdateBitstreamBuffer:%d\n", size);
 		if(ret != RETCODE_SUCCESS)
 		{
 			fprintf(stderr, "vpu_DecUpdateBitstreamBuffer failed: %d\n", size);
