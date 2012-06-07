@@ -4,65 +4,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include "vpu_lib.h"
-#include "vpu_io.h"
+#include "mxc_defs.h"
 #include "mxc_vpu.h"
-#include "framebuf.h"
-
-
-#define STREAM_BUF_SIZE	(0x200000)
-
-typedef unsigned long u32;
-
-/**
- * @brief Instance object for encoding
- * @details You should <b>NOT</b> access this data structure directly.
- */
-struct EncodingInstance
-{
-	/** @brief Encoder handle */
-	EncHandle handle;
-
-	/** @brief Physical bitstream buffer */
-	PhysicalAddress phy_bsbuf_addr;
-
-	/** @brief Virtual bitstream buffer */
-	u32 virt_bsbuf_addr;
-
-	/** @brief Encoded Picture width */
-	int enc_picwidth;
-
-	/** @brief Encoded Picture height */
-	int enc_picheight;
-
-	/** @brief Source Picture width */
-	int src_picwidth;
-
-	/** @brief Source Picture height */
-	int src_picheight;
-
-	/** @brief Total number of framebuffers allocated */
-	int fbcount;
-
-	/** @brief Index of frame buffer that contains YUV image */
-	int src_fbid;
-
-	/** @brief Frame buffer base given to encoder */
-	FrameBuffer *fb;
-
-	/** @brief Allocated fb pointers are stored here */
-	struct frame_buf **pfbpool;
-
-	EncReportInfo mbInfo;
-	EncReportInfo mvInfo;
-	EncReportInfo sliceInfo;
-
-	vpu_mem_desc mem_desc;
-	int fd;
-	EncParam enc_param;
-	int input_size;
-
-};
 
 static int vpu_write(int fd, char *vptr, int n)
 {

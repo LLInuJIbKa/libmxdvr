@@ -1,11 +1,12 @@
 CC=/opt/toolchain/bin/arm-none-linux-gnueabi-gcc 
 ROOTFS:=/media/SmartHome_SD
 TARGET_SHARED_OBJECT:=libmxdvr.so 
-SOURCE_FILES:=v4l2dev.c mxc_ipu.c mxc_vpu.c mxc_vpu_encoder.c mxc_vpu_decoder.c platform.c font.c framebuf.c mjpeg.c
+SOURCE_FILES:=v4l2dev.c mxc_vpu.c mxc_vpu_encoder.c mxc_vpu_decoder.c mxc_display.c platform.c font.c framebuf.c mjpeg.c
 OBJECTS:=$(subst .c,.o, $(SOURCE_FILES))
 
 
 INCLUDE_DIRS=\
+-I./include \
 -I$(ROOTFS)/usr/include \
 -I$(ROOTFS)/usr/include/cairo \
 -I$(ROOTFS)/usr/include/pango-1.0 \

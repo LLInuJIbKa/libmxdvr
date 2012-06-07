@@ -57,7 +57,8 @@ size_t v4l2dev_get_buffersize(v4l2dev device);
 /**
  * @brief Read a frame from V4L2 device. The default output pixel format is yuv420p.
  * @param device Target V4L2 device
- * @return Pointer to the memory mapped RAW buffer or yuv420p converted buffer
+ * @param output Pointer to the output buffer
+ * @return Number of bytes read
  */
 int v4l2dev_read(v4l2dev device, unsigned char* output);
 

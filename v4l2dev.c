@@ -303,7 +303,7 @@ int v4l2dev_read(v4l2dev device, unsigned char* output)
 		if(!result)
 		{
 			fprintf(stderr, "select timeout\n");
-			return NULL;
+			return -1;
 		}
 
 		memset(&buf, 0, sizeof(struct v4l2_buffer));
@@ -319,7 +319,7 @@ int v4l2dev_read(v4l2dev device, unsigned char* output)
 			{
 				fprintf(stderr, "Waiting...\n");
 				continue;
-			}else return NULL;
+			}else return -1;
 		}
 
 		size = buf.bytesused;

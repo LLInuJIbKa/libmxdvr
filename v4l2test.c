@@ -11,8 +11,8 @@
 #define DEVICE_NODE	"/dev/video0"
 #define TTY_PATH	"/dev/tty0"
 #define OUTPUT_MP4_FILENAME	"test.mp4"
-#define CAPTURE_WIDTH	(1280)
-#define CAPTURE_HEIGHT	(720)
+#define CAPTURE_WIDTH	(640)
+#define CAPTURE_HEIGHT	(480)
 
 #define DISPLAY_WIDTH	(1024)
 #define DISPLAY_HEIGHT	(768)
@@ -26,7 +26,7 @@ int main(int argc, char **argv)
 	unsigned char* buffer = NULL;
 	int i;
 	unsigned char* rgb_buffer = NULL;
-	ipu_lib_handle_t* ipu_handle = NULL;
+	//ipu_lib_handle_t* ipu_handle = NULL;
 	char timestring[256] = { };
 	time_t rawtime;
 	struct tm* timeinfo;
@@ -43,8 +43,8 @@ int main(int argc, char **argv)
 	v4l2dev_init(device, CAPTURE_WIDTH, CAPTURE_HEIGHT, 4);
 
 	rgb_buffer = calloc(1, DISPLAY_WIDTH * DISPLAY_HEIGHT * 2);
-	ipu_handle = ipu_init(CAPTURE_WIDTH, CAPTURE_HEIGHT, IPU_PIX_FMT_YUV422P, DISPLAY_WIDTH, DISPLAY_HEIGHT, IPU_PIX_FMT_RGB565, 1);
-	ipu_query_task();
+	//ipu_handle = ipu_init(CAPTURE_WIDTH, CAPTURE_HEIGHT, IPU_PIX_FMT_YUV422P, DISPLAY_WIDTH, DISPLAY_HEIGHT, IPU_PIX_FMT_RGB565, 1);
+	//ipu_query_task();
 
 	vpu_init();
 
@@ -56,14 +56,13 @@ int main(int argc, char **argv)
 
 	//encoding = vpu_create_encoding_instance(CAPTURE_WIDTH, CAPTURE_HEIGHT, OUTPUT_MP4_FILENAME);
 
-	buffer = calloc(1, CAPTURE_WIDTH * CAPTURE_HEIGHT * 4);
 	decoding = vpu_create_decoding_instance_for_v4l2(device);
 
 	for(i = 0;; ++i)
 	{
 		/* Read RAW image from V4L2 device */
 
-		vpu_decode_one_frame(decoding, buffer);
+		vpu_decode_one_frame(decoding, &buffer);
 
 		/* Update text image every second */
 
@@ -88,7 +87,7 @@ int main(int argc, char **argv)
 
 		/* Use IPU to display RGB565 image */
 
-		ipu_buffer_update(ipu_handle, buffer, rgb_buffer);
+		//ipu_buffer_update(ipu_handle, buffer, rgb_buffer);
 
 
 		/* Detect ENTER key */
@@ -109,7 +108,7 @@ int main(int argc, char **argv)
 
 
 	text_layout_destroy(text);
-	ipu_uninit(&ipu_handle);
+	//ipu_uninit(&ipu_handle);
 	vpu_uninit();
 	v4l2dev_close(&device);
 
