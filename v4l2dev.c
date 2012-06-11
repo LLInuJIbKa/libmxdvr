@@ -327,6 +327,7 @@ int v4l2dev_read(v4l2dev device, unsigned char* output)
 #ifdef USE_FMT_MJPG
 
 		memcpy(output, device->mmap_buffers[buf.index], buf.bytesused);
+
 		//jpeg_to_raw(device->mmap_buffers[buf.index], buf.bytesused, device->buffer);
 
 #else
