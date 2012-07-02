@@ -52,5 +52,6 @@ void vpu_close_encoding_instance(EncodingInstance* instance);
 
 DecodingInstance vpu_create_decoding_instance_for_v4l2(v4l2dev device);
 int vpu_decode_one_frame(DecodingInstance instance, unsigned char** output);
+void vpu_display(DecodingInstance dec);
 
 #endif /* MXC_VPU_H_ */

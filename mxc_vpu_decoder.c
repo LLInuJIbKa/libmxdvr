@@ -204,6 +204,7 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 
 	memset(dec->buffer, 0, MJPG_BUFFER_SIZE);
 	nread = v4l2dev_read(dec->device, dec->buffer);
+	//fprintf(stderr, "nread: %6d\n", nread);
 	if(nread == -1) return 0;
 
 	//size = nread / 512 * 512;
@@ -483,7 +484,7 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 	DecHandle handle = dec->handle;
 	FrameBuffer *fb = dec->fb;
 	DecOutputInfo outinfo = {};
-	int rotid = 0;
+	static int rotid = 0;
 	int ret;
 	int is_waited_int;
 	int loop_id;
@@ -591,6 +592,7 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 	}
 
 	actual_display_index = rotid;
+//	actual_display_index = 0;
 
 //
 //	{
@@ -605,9 +607,11 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 //		disp_clr_index = outinfo.indexFrameDisplay;
 //	}
 //
-
-	v4l_put_data(disp, actual_display_index, field, 20);
-	//memcpy(*output, disp->buffers[actual_display_index], disp->buf.bytesused);
+	//fprintf(stderr, "memcpy %d bytes from 0x%X\n", disp->buffers[actual_display_index]->length, disp->buffers[actual_display_index]->start);
+	//memcpy(*output, disp->buffers[actual_display_index]->start, disp->buffers[actual_display_index]->length);
+	*output = disp->buffers[actual_display_index]->start;
+//	v4l_put_data(disp, actual_display_index, field, 30);
+//	fprintf(stderr, "%d\n", rotid);
 	rotid++;
 	rotid %= dec->fbcount;
 
@@ -615,3 +619,7 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 	return 0;
 }
 
+void vpu_display(DecodingInstance dec)
+{
+	v4l_put_data(dec->disp, 0, V4L2_FIELD_NONE, 30);
+}
