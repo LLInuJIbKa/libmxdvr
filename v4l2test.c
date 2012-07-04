@@ -8,12 +8,13 @@
 #include "mxc_ipu.h"
 #include "mxc_vpu.h"
 #include "font.h"
+#include <time.h>
 
 #define DEVICE_NODE	"/dev/video0"
 #define TTY_PATH	"/dev/tty0"
 #define OUTPUT_MP4_FILENAME	"test.mp4"
-#define CAPTURE_WIDTH	(640)
-#define CAPTURE_HEIGHT	(480)
+#define CAPTURE_WIDTH	(1280)
+#define CAPTURE_HEIGHT	(720)
 
 #define DISPLAY_WIDTH	(1024)
 #define DISPLAY_HEIGHT	(768)
@@ -74,6 +75,9 @@ int main(int argc, char **argv)
 	fd_set fds;
 	EncodingInstance encoding = NULL;
 	DecodingInstance decoding = NULL;
+	int ret;
+	struct timeval tstart, tend;
+	int elapsed;
 
 
 	fb_wakeup(TTY_PATH);
@@ -84,6 +88,7 @@ int main(int argc, char **argv)
 
 	rgb_buffer = calloc(1, DISPLAY_WIDTH * DISPLAY_HEIGHT * 2);
 	//ipu_handle = ipu_init(CAPTURE_WIDTH, CAPTURE_HEIGHT, IPU_PIX_FMT_YUV422P, DISPLAY_WIDTH, DISPLAY_HEIGHT, IPU_PIX_FMT_YUV420P, 0);
+	ipu_handle = ipu_init(CAPTURE_WIDTH, CAPTURE_HEIGHT, IPU_PIX_FMT_YUV422P, CAPTURE_WIDTH, CAPTURE_HEIGHT, IPU_PIX_FMT_YUV420P, 0);
 	//ipu_query_task();
 
 	vpu_init();
@@ -101,9 +106,12 @@ int main(int argc, char **argv)
 
 	for(i = 0;; ++i)
 	{
-		/* Read RAW image from V4L2 device */
 
-		vpu_decode_one_frame(decoding, &rgb_buffer);
+		/* Read RAW image from V4L2 device */
+		gettimeofday(&tstart, NULL);
+
+		ret = vpu_decode_one_frame(decoding, &rgb_buffer);
+
 
 		/* Update text image every second */
 
@@ -111,40 +119,47 @@ int main(int argc, char **argv)
 
 		//ipu_buffer_update(ipu_handle, rgb_buffer, buffer);
 
+		if(!ret)
 		{
-			i = 0;
-			time(&rawtime);
-			timeinfo = localtime(&rawtime);
-			strftime(timestring, 255, "%p %l:%M:%S %Y/%m/%d", timeinfo);
-			text_layout_render_markup_text(text, timestring);
+
+//			{
+//				i = 0;
+//				time(&rawtime);
+//				timeinfo = localtime(&rawtime);
+//				strftime(timestring, 255, "%p %l:%M:%S %Y/%m/%d", timeinfo);
+//				text_layout_render_markup_text(text, timestring);
+//			}
+
+			//text_layout_copy_to_yuv420p(text, 360, 400, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
+			//text_layout_copy_to_yuv422p(text, 360, 400, rgb_buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
+			//text_layout_copy_to_yuv422(text, 360, 400, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
+
+			//convert_yuv422p_to_yuv420p(rgb_buffer, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
+
+			ipu_buffer_update(ipu_handle, rgb_buffer, buffer);
+
+
+			vpu_display(decoding);
+
+			/* Use VPU to encode H.264 stream */
+
+			vpu_encode_one_frame(encoding, buffer);
+
+
 		}
-
-
-		//text_layout_copy_to_yuv420p(text, 360, 400, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
-		text_layout_copy_to_yuv422p(text, 360, 400, rgb_buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
-		//text_layout_copy_to_yuv422(text, 360, 400, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
-
-		convert_yuv422p_to_yuv420p(rgb_buffer, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
-		vpu_display(decoding);
-
-		/* Use VPU to encode H.264 stream */
-
-		vpu_encode_one_frame(encoding, buffer);
-
-
-		/* Use IPU to display RGB565 image */
-
-		//ipu_buffer_update(ipu_handle, buffer, rgb_buffer);
+		gettimeofday(&tend, NULL);
+		elapsed = (tend.tv_sec - tstart.tv_sec) * 1000000 + tend.tv_usec - tstart.tv_usec;
+		fprintf(stderr, "Time elapsed: %d ms\n", elapsed / 1000);
 
 
 		/* Detect ENTER key */
-		//usleep(100000);
 		FD_ZERO(&fds);
 		FD_SET(0, &fds);
 		if(select(1, &fds, NULL, NULL, &tv) > 0) break;
 	}
 
 	vpu_close_encoding_instance(&encoding);
+
 
 	/* Consume stdin */
 
@@ -155,7 +170,7 @@ int main(int argc, char **argv)
 
 
 	text_layout_destroy(text);
-	//ipu_uninit(&ipu_handle);
+	ipu_uninit(&ipu_handle);
 	vpu_uninit();
 	v4l2dev_close(&device);
 

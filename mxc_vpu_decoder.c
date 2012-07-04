@@ -556,7 +556,7 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 	if(outinfo.decodingSuccess == 0)
 	{
 		fprintf(stderr, "Incomplete finish of decoding process.\n\tframe_id = %d\n", (int)frame_id);
-		return 0;
+		return -1;
 	}
 
 	if(outinfo.notSufficientPsBuffer)
@@ -610,16 +610,17 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 	//fprintf(stderr, "memcpy %d bytes from 0x%X\n", disp->buffers[actual_display_index]->length, disp->buffers[actual_display_index]->start);
 	//memcpy(*output, disp->buffers[actual_display_index]->start, disp->buffers[actual_display_index]->length);
 	*output = disp->buffers[actual_display_index]->start;
-//	v4l_put_data(disp, actual_display_index, field, 30);
+//	v4l_put_data(disp, actual_display_index, field, 25);
 //	fprintf(stderr, "%d\n", rotid);
+
 	rotid++;
 	rotid %= dec->fbcount;
-
+	dec->rot_buf_count = rotid;
 	frame_id++;
 	return 0;
 }
 
 void vpu_display(DecodingInstance dec)
 {
-	v4l_put_data(dec->disp, 0, V4L2_FIELD_NONE, 30);
+	v4l_put_data(dec->disp, dec->rot_buf_count, V4L2_FIELD_NONE, 30);
 }
