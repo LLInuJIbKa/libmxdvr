@@ -100,15 +100,19 @@ int main(int argc, char **argv)
 
 	buffer = calloc(1, CAPTURE_WIDTH * CAPTURE_HEIGHT * 2);
 
+
+	v4l2dev_start_enqueuing(device);
+
 	encoding = vpu_create_encoding_instance(CAPTURE_WIDTH, CAPTURE_HEIGHT, OUTPUT_MP4_FILENAME);
 
 	decoding = vpu_create_decoding_instance_for_v4l2(device);
+
+
 
 	for(i = 0;; ++i)
 	{
 
 		/* Read RAW image from V4L2 device */
-		gettimeofday(&tstart, NULL);
 
 		ret = vpu_decode_one_frame(decoding, &rgb_buffer);
 
@@ -122,34 +126,34 @@ int main(int argc, char **argv)
 		if(!ret)
 		{
 
-//			{
-//				i = 0;
-//				time(&rawtime);
-//				timeinfo = localtime(&rawtime);
-//				strftime(timestring, 255, "%p %l:%M:%S %Y/%m/%d", timeinfo);
-//				text_layout_render_markup_text(text, timestring);
-//			}
+			text_layout_copy_to_yuv422p(text, 360, 400, rgb_buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
+			convert_yuv422p_to_yuv420p(rgb_buffer, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
+
+			{
+				i = 0;
+				time(&rawtime);
+				timeinfo = localtime(&rawtime);
+				strftime(timestring, 255, "%p %l:%M:%S %Y/%m/%d", timeinfo);
+				text_layout_render_markup_text(text, timestring);
+			}
 
 			//text_layout_copy_to_yuv420p(text, 360, 400, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
-			//text_layout_copy_to_yuv422p(text, 360, 400, rgb_buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
+
 			//text_layout_copy_to_yuv422(text, 360, 400, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
 
-			//convert_yuv422p_to_yuv420p(rgb_buffer, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
 
-			ipu_buffer_update(ipu_handle, rgb_buffer, buffer);
+
+			//ipu_buffer_update(ipu_handle, rgb_buffer, buffer);
 
 
 			vpu_display(decoding);
 
 			/* Use VPU to encode H.264 stream */
 
-			vpu_encode_one_frame(encoding, buffer);
+			//vpu_encode_one_frame(encoding, buffer);
 
 
 		}
-		gettimeofday(&tend, NULL);
-		elapsed = (tend.tv_sec - tstart.tv_sec) * 1000000 + tend.tv_usec - tstart.tv_usec;
-		fprintf(stderr, "Time elapsed: %d ms\n", elapsed / 1000);
 
 
 		/* Detect ENTER key */
@@ -172,6 +176,8 @@ int main(int argc, char **argv)
 	text_layout_destroy(text);
 	ipu_uninit(&ipu_handle);
 	vpu_uninit();
+
+	v4l2dev_stop_enqueuing(device);
 	v4l2dev_close(&device);
 
 	return EXIT_SUCCESS;

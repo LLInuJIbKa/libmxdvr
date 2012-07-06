@@ -62,4 +62,8 @@ size_t v4l2dev_get_buffersize(v4l2dev device);
  */
 int v4l2dev_read(v4l2dev device, unsigned char* output);
 
+void v4l2dev_start_enqueuing(v4l2dev device);
+void v4l2dev_stop_enqueuing(v4l2dev device);
+unsigned char* v4l2dev_dequeue(v4l2dev device);
+
 #endif /* V4L2DEV_H_ */

@@ -7,7 +7,9 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <stdint.h>
+#include <pthread.h>
 #include "v4l2dev.h"
+#include "queue.h"
 #ifndef	SOFTWARE_YUV422_TO_YUV420
 #include "mxc_ipu.h"
 #endif
@@ -51,6 +53,9 @@ struct v4l2dev
 #endif
 	DecodingInstance decoding;
 
+	queue mjpg_queue;
+	pthread_t thread;
+	int run_thread;
 };
 
 #ifndef USE_FMT_MJPG
@@ -344,4 +349,50 @@ int v4l2dev_read(v4l2dev device, unsigned char* output)
 	}
 	return -1;
 }
+
+
+static int v4l2dev_thread(v4l2dev device)
+{
+	unsigned char* tmp = calloc(1, 262144);
+	int size;
+
+	device->run_thread = 1;
+	while(device->run_thread)
+	{
+		size = v4l2dev_read(device, tmp);
+		fprintf(stderr, "v4l2dev_read: %d\n", size);
+		queue_push(device->mjpg_queue, tmp);
+	}
+
+	free(tmp);
+	return 0;
+}
+
+void v4l2dev_start_enqueuing(v4l2dev device)
+{
+	device->mjpg_queue = queue_new(262144, 16);
+	pthread_create(&device->thread, NULL, v4l2dev_thread, device);
+}
+
+void v4l2dev_stop_enqueuing(v4l2dev device)
+{
+	int ret;
+	device->run_thread = 0;
+	pthread_join(device->thread, &ret);
+	queue_delete(&device->mjpg_queue);
+}
+
+
+unsigned char* v4l2dev_dequeue(v4l2dev device)
+{
+	return queue_pop(device->mjpg_queue);
+}
+
+
+
+
+
+
+
+
 

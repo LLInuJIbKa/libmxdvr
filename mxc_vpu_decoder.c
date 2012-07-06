@@ -42,136 +42,6 @@ static int vpu_read(int fd, char *buf, int n)
 	return freadn(fd, buf, n);
 }
 
-//
-//static int dec_fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *fill_end_bs)
-//{
-//	RetCode ret;
-//	DecHandle handle = dec->handle;
-//	PhysicalAddress pa_read_ptr, pa_write_ptr;
-//	u32 target_addr, space;
-//	int size;
-//	int nread, room;
-//	u32 bs_va_startaddr = dec->virt_bsbuf_addr;
-//	u32 bs_va_endaddr = dec->virt_bsbuf_addr + STREAM_BUF_SIZE;
-//	u32 bs_pa_startaddr = dec->phy_bsbuf_addr;
-//	*eos = 0;
-//
-//	ret = vpu_DecGetBitstreamBuffer(handle, &pa_read_ptr, &pa_write_ptr, &space);
-//	if(ret != RETCODE_SUCCESS)
-//	{
-//		fputs("vpu_DecGetBitstreamBuffer failed\n", stderr);
-//		return -1;
-//	}
-//
-//	/* Decoder bitstream buffer is empty */
-//	if(space <= 0)
-//		return 0;
-//
-//	if(defaultsize > 0)
-//	{
-//		if(space < defaultsize)
-//			return 0;
-//
-//		size = defaultsize;
-//	}
-//	else
-//	{
-//		size = ((space >> 9) << 9);
-//	}
-//
-//	if(size == 0)
-//		return 0;
-//
-//	/* Fill the bitstream buffer */
-//	target_addr = bs_va_startaddr + (pa_write_ptr - bs_pa_startaddr);
-//	if((target_addr + size) > bs_va_endaddr)
-//	{
-//		room = bs_va_endaddr - target_addr;
-//		nread = vpu_read(dec->fd, (void *)target_addr, room);
-//		if(nread <= 0)
-//		{
-//			/* EOF or error */
-//			if(nread < 0)
-//			{
-//				if(nread == -EAGAIN)
-//					return 0;
-//
-//				return -1;
-//			}
-//
-//			*eos = 1;
-//		}
-//		else
-//		{
-//			/* unable to fill the requested size, so back off! */
-//			if(nread != room)
-//				goto update;
-//
-//			/* read the remaining */
-//			space = nread;
-//			nread = vpu_read(dec->fd, (void *)bs_va_startaddr, (size - room));
-//			if(nread <= 0)
-//			{
-//				/* EOF or error */
-//				if(nread < 0)
-//				{
-//					if(nread == -EAGAIN)
-//						return 0;
-//
-//					return -1;
-//				}
-//
-//				*eos = 1;
-//			}
-//
-//			nread += space;
-//		}
-//	}
-//	else
-//	{
-//		nread = vpu_read(dec->fd, (void *)target_addr, size);
-//		if(nread <= 0)
-//		{
-//			/* EOF or error */
-//			if(nread < 0)
-//			{
-//				if(nread == -EAGAIN)
-//					return 0;
-//
-//				return -1;
-//			}
-//
-//			*eos = 1;
-//		}
-//	}
-//
-//	update: if(*eos == 0)
-//	{
-//		ret = vpu_DecUpdateBitstreamBuffer(handle, nread);
-//		if(ret != RETCODE_SUCCESS)
-//		{
-//			fputs("vpu_DecUpdateBitstreamBuffer failed\n", stderr);
-//			return -1;
-//		}
-//		*fill_end_bs = 0;
-//	}
-//	else
-//	{
-//		if(!*fill_end_bs)
-//		{
-//			ret = vpu_DecUpdateBitstreamBuffer(handle, STREAM_END_SIZE);
-//			if(ret != RETCODE_SUCCESS)
-//			{
-//				fputs("vpu_DecUpdateBitstreamBuffer failed\n", stderr);
-//				return -1;
-//			}
-//			*fill_end_bs = 1;
-//		}
-//
-//	}
-//
-//	return nread;
-//}
 
 static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *fill_end_bs)
 {
@@ -186,6 +56,7 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 	u32 bs_pa_startaddr = dec->phy_bsbuf_addr;
 	int space = 0;
 	u32 room;
+	unsigned char* ptr = NULL;
 	*eos = 0;
 
 	ret = vpu_DecGetBitstreamBuffer(handle, &pa_read_ptr, &pa_write_ptr, &space);
@@ -203,7 +74,16 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 	//fprintf(stderr, "Offset: %d, Space: %d\n", (pa_write_ptr - bs_pa_startaddr), space);
 
 	memset(dec->buffer, 0, MJPG_BUFFER_SIZE);
-	nread = v4l2dev_read(dec->device, dec->buffer);
+
+	while(!(ptr = v4l2dev_dequeue(dec->device)))
+	{
+		usleep(10000);
+	}
+
+
+	memcpy(dec->buffer, ptr, 262144);
+
+	//nread = v4l2dev_read(dec->device, dec->buffer);
 	//fprintf(stderr, "nread: %6d\n", nread);
 	if(nread == -1) return 0;
 
