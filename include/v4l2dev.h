@@ -8,6 +8,7 @@
 #define V4L2DEV_H_
 
 #include <linux/videodev2.h>
+#include "queue.h"
 
 /**
  * @brief Use software 422-to-420p conversion.
@@ -64,6 +65,6 @@ int v4l2dev_read(v4l2dev device, unsigned char* output);
 
 void v4l2dev_start_enqueuing(v4l2dev device);
 void v4l2dev_stop_enqueuing(v4l2dev device);
-unsigned char* v4l2dev_dequeue(v4l2dev device);
+queue v4l2dev_get_queue(v4l2dev device);
 
 #endif /* V4L2DEV_H_ */

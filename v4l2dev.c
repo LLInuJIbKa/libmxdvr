@@ -18,6 +18,10 @@
 #include "mjpeg.h"
 #endif
 
+#define V4L2DEV_BUFFER_SIZE	(262144)
+#define V4L2DEV_QUEUE_SIZE	(16)
+
+
 /**
  * @brief Handle object of V4L2 devices
  * @details You should <b>NOT</b> access this data structure directly.
@@ -350,17 +354,16 @@ int v4l2dev_read(v4l2dev device, unsigned char* output)
 	return -1;
 }
 
-
 static int v4l2dev_thread(v4l2dev device)
 {
-	unsigned char* tmp = calloc(1, 262144);
+	unsigned char* tmp = calloc(1, V4L2DEV_BUFFER_SIZE);
 	int size;
 
 	device->run_thread = 1;
+
 	while(device->run_thread)
 	{
 		size = v4l2dev_read(device, tmp);
-		fprintf(stderr, "v4l2dev_read: %d\n", size);
 		queue_push(device->mjpg_queue, tmp);
 	}
 
@@ -370,7 +373,7 @@ static int v4l2dev_thread(v4l2dev device)
 
 void v4l2dev_start_enqueuing(v4l2dev device)
 {
-	device->mjpg_queue = queue_new(262144, 16);
+	device->mjpg_queue = queue_new(V4L2DEV_BUFFER_SIZE, V4L2DEV_QUEUE_SIZE);
 	pthread_create(&device->thread, NULL, v4l2dev_thread, device);
 }
 
@@ -382,17 +385,7 @@ void v4l2dev_stop_enqueuing(v4l2dev device)
 	queue_delete(&device->mjpg_queue);
 }
 
-
-unsigned char* v4l2dev_dequeue(v4l2dev device)
+queue v4l2dev_get_queue(v4l2dev device)
 {
-	return queue_pop(device->mjpg_queue);
+	return device->mjpg_queue;
 }
-
-
-
-
-
-
-
-
-
