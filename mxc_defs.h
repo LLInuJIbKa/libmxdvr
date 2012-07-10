@@ -5,16 +5,18 @@
 #include "vpu_io.h"
 #include "vpu_lib.h"
 #include "framebuf.h"
+#include "queue.h"
 #include <stdint.h>
+#include <pthread.h>
 
 //#define STREAM_BUF_SIZE		(0x200000)
-#define STREAM_BUF_SIZE		(0x400000)
+#define STREAM_BUF_SIZE		(0x200000)
 #define PS_SAVE_SIZE		(0x080000)
 #define STREAM_END_SIZE		(0)
 #define SIZE_USER_BUF		(0x1000)
 #define STREAM_FILL_SIZE	(0x40000)
 
-#define MJPG_BUFFER_SIZE	(0x80000)
+#define MJPG_BUFFER_SIZE	(0x40000)
 
 #ifndef u32
 typedef Uint32 u32;
@@ -64,8 +66,11 @@ struct DecodingInstance
 
 	unsigned char* buffer;
 	int buffer_size;
-	int buffer_read_position;
 
+	pthread_t thread;
+	queue input_queue;
+	queue output_queue;
+	int run_thread;
 };
 
 /**
@@ -115,6 +120,10 @@ struct EncodingInstance
 	int fd;
 	EncParam enc_param;
 	int input_size;
+
+	pthread_t thread;
+	queue input_queue;
+	int run_thread;
 
 };
 

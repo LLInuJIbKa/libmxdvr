@@ -7,6 +7,19 @@
 #include "mxc_defs.h"
 #include "mxc_vpu.h"
 
+#define timer_start; \
+{\
+	struct timeval ts, te;\
+	int elapsed;\
+	gettimeofday(&ts, NULL);
+
+#define timer_stop; \
+	gettimeofday(&te, NULL);\
+	elapsed = (te.tv_sec - ts.tv_sec) * 1000000 + (te.tv_usec - ts.tv_usec);\
+	fprintf(stderr, "encoding %d ms\n", elapsed/1000);\
+}
+
+
 static int vpu_write(int fd, char *vptr, int n)
 {
 	int nleft;
@@ -52,7 +65,7 @@ static int encoder_open(struct EncodingInstance *instance)
 	encop.picHeight = instance->enc_picheight;
 
 	/*Note: Frame rate cannot be less than 15fps per H.263 spec */
-	encop.frameRateInfo = 15;
+	encop.frameRateInfo = 30;
 	encop.bitRate = 0;
 	encop.gopSize = 0;
 	encop.slicemode.sliceMode = 0; /* 0: 1 slice per picture; 1: Multiple slices per picture */
@@ -315,4 +328,64 @@ void vpu_close_encoding_instance(EncodingInstance* instance)
 	*instance = NULL;
 }
 
+static void convert_yuv422p_to_yuv420p(unsigned char *InBuff, unsigned char *OutBuff, int width, int height)
+{
+	int i, j;
+	unsigned char* in_u;
+	unsigned char* in_v;
+	unsigned char* out_u;
+	unsigned char* out_v;
 
+	/* Write Y plane */
+	memcpy(OutBuff, InBuff, width * height);
+
+	/* Write UV plane */
+	for(j = 0;j < height / 2; ++j)
+	{
+		in_u = &(InBuff[width * height + j * 2 * width / 2]);
+		in_v = &(InBuff[width * height * 3 / 2 + j * 2 * width / 2]);
+
+		out_u = &(OutBuff[width * height + j * width / 2]);
+		out_v = &(OutBuff[width * height * 5 / 4 + j * width / 2]);
+
+		for(i = 0;i < width / 2; ++i)
+		{
+			out_u[i] = (in_u[i] + in_u[width / 2 + i]) / 2;
+			out_v[i] = (in_v[i] + in_v[width / 2 + i]) / 2;
+			out_u[i] = in_u[i];
+			out_v[i] = in_v[i];
+
+		}
+	}
+}
+
+static int vpu_encoding_thread(EncodingInstance instance)
+{
+	unsigned char* frame422 = NULL;
+	unsigned char* frame420 = calloc(1, instance->input_size);
+
+	instance->run_thread = 1;
+	while(instance->run_thread)
+	{
+		while(!(frame422 = queue_pop(instance->input_queue)))
+			usleep(20000);
+		//convert_yuv422p_to_yuv420p(frame422, frame420, instance->src_picwidth, instance->src_picheight);
+		vpu_encode_one_frame(instance, frame422);
+
+	}
+
+	free(frame420);
+}
+
+void vpu_start_encoding(EncodingInstance instance, queue input)
+{
+	instance->input_queue = input;
+	pthread_create(&instance->thread, NULL, vpu_encoding_thread, instance);
+}
+
+void vpu_stop_encoding(EncodingInstance instance)
+{
+	int ret;
+	instance->run_thread = 0;
+	pthread_join(instance->thread, &ret);
+}

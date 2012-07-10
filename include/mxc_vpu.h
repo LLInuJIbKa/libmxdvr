@@ -7,6 +7,10 @@
 
 #include "vpu_lib.h"
 #include "v4l2dev.h"
+#include "queue.h"
+
+#define VPU_DECODING_QUEUE_SIZE	(16)
+
 
 typedef struct EncodingInstance* EncodingInstance;
 typedef struct DecodingInstance* DecodingInstance;
@@ -50,8 +54,14 @@ int vpu_encode_one_frame(EncodingInstance instance, const unsigned char* data);
 void vpu_close_encoding_instance(EncodingInstance* instance);
 
 
-DecodingInstance vpu_create_decoding_instance_for_v4l2(v4l2dev device);
+DecodingInstance vpu_create_decoding_instance_for_v4l2(queue input);
 int vpu_decode_one_frame(DecodingInstance instance, unsigned char** output);
 void vpu_display(DecodingInstance dec);
+void vpu_start_decoding(DecodingInstance dec);
+void vpu_stop_decoding(DecodingInstance dec);
+queue vpu_get_decode_queue(DecodingInstance dec);
+void vpu_start_encoding(EncodingInstance instance, queue input);
+void vpu_stop_encoding(EncodingInstance instance);
+
 
 #endif /* MXC_VPU_H_ */

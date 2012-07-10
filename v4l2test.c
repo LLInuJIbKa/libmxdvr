@@ -13,14 +13,26 @@
 #define DEVICE_NODE	"/dev/video0"
 #define TTY_PATH	"/dev/tty0"
 #define OUTPUT_MP4_FILENAME	"test.mp4"
-#define CAPTURE_WIDTH	(1280)
-#define CAPTURE_HEIGHT	(720)
+#define CAPTURE_WIDTH	(640)
+#define CAPTURE_HEIGHT	(480)
 
 #define DISPLAY_WIDTH	(1024)
 #define DISPLAY_HEIGHT	(768)
 
 #define FRAME_PER_SECOND	(25)
 
+
+#define timer_start; \
+{\
+	struct timeval ts, te;\
+	int elapsed;\
+	gettimeofday(&ts, NULL);
+
+#define timer_stop; \
+	gettimeofday(&te, NULL);\
+	elapsed = (te.tv_sec - ts.tv_sec) * 1000000 + (te.tv_usec - ts.tv_usec);\
+	fprintf(stderr, "encoding %d ms\n", elapsed/1000);\
+}
 
 
 
@@ -47,8 +59,8 @@ static void convert_yuv422p_to_yuv420p(unsigned char *InBuff, unsigned char *Out
 
 		for(i = 0;i < width / 2; ++i)
 		{
-//			out_u[i] = (in_u[i] + in_u[width / 2 + i]) / 2;
-//			out_v[i] = (in_v[i] + in_v[width / 2 + i]) / 2;
+			out_u[i] = (in_u[i] + in_u[width / 2 + i]) / 2;
+			out_v[i] = (in_v[i] + in_v[width / 2 + i]) / 2;
 			out_u[i] = in_u[i];
 			out_v[i] = in_v[i];
 
@@ -102,20 +114,16 @@ int main(int argc, char **argv)
 
 
 	v4l2dev_start_enqueuing(device);
-
 	encoding = vpu_create_encoding_instance(CAPTURE_WIDTH, CAPTURE_HEIGHT, OUTPUT_MP4_FILENAME);
-
-	decoding = vpu_create_decoding_instance_for_v4l2(device);
-
-
+	decoding = vpu_create_decoding_instance_for_v4l2(v4l2dev_get_queue(device));
+	//vpu_start_decoding(decoding);
+	//vpu_start_encoding(encoding, vpu_get_decode_queue(decoding));
 
 	for(i = 0;; ++i)
 	{
 
 		/* Read RAW image from V4L2 device */
-
 		ret = vpu_decode_one_frame(decoding, &rgb_buffer);
-
 
 		/* Update text image every second */
 
@@ -123,11 +131,9 @@ int main(int argc, char **argv)
 
 		//ipu_buffer_update(ipu_handle, rgb_buffer, buffer);
 
+
 		if(!ret)
 		{
-
-			text_layout_copy_to_yuv422p(text, 360, 400, rgb_buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
-			convert_yuv422p_to_yuv420p(rgb_buffer, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
 
 			{
 				i = 0;
@@ -137,6 +143,10 @@ int main(int argc, char **argv)
 				text_layout_render_markup_text(text, timestring);
 			}
 
+			text_layout_copy_to_yuv422p(text, 360, 400, rgb_buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
+			convert_yuv422p_to_yuv420p(rgb_buffer, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
+
+
 			//text_layout_copy_to_yuv420p(text, 360, 400, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
 
 			//text_layout_copy_to_yuv422(text, 360, 400, buffer, CAPTURE_WIDTH, CAPTURE_HEIGHT);
@@ -145,24 +155,21 @@ int main(int argc, char **argv)
 
 			//ipu_buffer_update(ipu_handle, rgb_buffer, buffer);
 
-
 			vpu_display(decoding);
 
+
 			/* Use VPU to encode H.264 stream */
-
-			//vpu_encode_one_frame(encoding, buffer);
-
+			vpu_encode_one_frame(encoding, buffer);
 
 		}
-
-
 		/* Detect ENTER key */
 		FD_ZERO(&fds);
 		FD_SET(0, &fds);
 		if(select(1, &fds, NULL, NULL, &tv) > 0) break;
 	}
 
-	vpu_close_encoding_instance(&encoding);
+
+
 
 
 	/* Consume stdin */
@@ -175,6 +182,12 @@ int main(int argc, char **argv)
 
 	text_layout_destroy(text);
 	ipu_uninit(&ipu_handle);
+
+	//vpu_stop_encoding(encoding);
+	//vpu_stop_decoding(decoding);
+
+	//vpu_close_encoding_instance(&encoding);
+
 	vpu_uninit();
 
 	v4l2dev_stop_enqueuing(device);

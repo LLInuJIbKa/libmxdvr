@@ -10,6 +10,17 @@
 #include "mxc_vpu.h"
 #include "mxc_display.h"
 
+#define timer_start; \
+{\
+	struct timeval ts, te;\
+	int elapsed;\
+	gettimeofday(&ts, NULL);
+
+#define timer_stop; \
+	gettimeofday(&te, NULL);\
+	elapsed = (te.tv_sec - ts.tv_sec) * 1000000 + (te.tv_usec - ts.tv_usec);\
+	fprintf(stderr, "encoding %d ms\n", elapsed/1000);\
+}
 
 static int freadn(int fd, void *vptr, size_t n)
 {
@@ -70,24 +81,17 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 		return 0;
 
 
-
-	//fprintf(stderr, "Offset: %d, Space: %d\n", (pa_write_ptr - bs_pa_startaddr), space);
-
 	memset(dec->buffer, 0, MJPG_BUFFER_SIZE);
 
-	while(!(ptr = v4l2dev_dequeue(dec->device)))
+	while(!(ptr = queue_pop(dec->input_queue)))
 	{
-		usleep(10000);
+		usleep(0);
 	}
 
 
 	memcpy(dec->buffer, ptr, 262144);
 
-	//nread = v4l2dev_read(dec->device, dec->buffer);
-	//fprintf(stderr, "nread: %6d\n", nread);
 	if(nread == -1) return 0;
-
-	//size = nread / 512 * 512;
 
 	nread = MJPG_BUFFER_SIZE;
 
@@ -108,31 +112,6 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 	}
 
 	vpu_DecUpdateBitstreamBuffer(handle, nread);
-
-
-//	if(*eos == 0)
-//	{
-//		ret = vpu_DecUpdateBitstreamBuffer(handle, size);
-//		if(ret != RETCODE_SUCCESS)
-//		{
-//			fprintf(stderr, "vpu_DecUpdateBitstreamBuffer failed: %d\n", size);
-//			return -1;
-//		}
-//		*fill_end_bs = 0;
-//	}else
-//	{
-//		if(!*fill_end_bs)
-//		{
-//			ret = vpu_DecUpdateBitstreamBuffer(handle, STREAM_END_SIZE);
-//			if(ret != RETCODE_SUCCESS)
-//			{
-//				fputs("vpu_DecUpdateBitstreamBuffer failed\n", stderr);
-//				return -1;
-//			}
-//			*fill_end_bs = 1;
-//		}
-//
-//	}
 
 	return nread;
 }
@@ -263,6 +242,7 @@ static int decoder_allocate_framebuffer(DecodingInstance dec)
 	divY = (dec->mjpg_fmt == MODE420 || dec->mjpg_fmt == MODE224) ? 2 : 1;
 
 	img_size = dec->stride * dec->picheight;
+	dec->buffer_size = img_size * (dec->mjpg_fmt == MODE422 ? 2.0 : 1.5);
 
 
 	mvcol_md = dec->mvcol_memdesc = calloc(totalfb, sizeof(vpu_mem_desc));
@@ -308,7 +288,7 @@ err:
 	return -1;
 }
 
-DecodingInstance vpu_create_decoding_instance_for_v4l2(v4l2dev device)
+DecodingInstance vpu_create_decoding_instance_for_v4l2(queue input)
 {
 	DecodingInstance dec = NULL;
 	DecParam decparam = {};
@@ -326,7 +306,7 @@ DecodingInstance vpu_create_decoding_instance_for_v4l2(v4l2dev device)
 	dec->phy_bsbuf_addr = dec->mem_desc.phy_addr;
 	dec->virt_bsbuf_addr = dec->mem_desc.virt_uaddr;
 	dec->reorderEnable = 1;
-	dec->device = device;
+	dec->input_queue = input;
 	dec->buffer = calloc(1, MJPG_BUFFER_SIZE);
 
 	decoder_open(dec);
@@ -392,10 +372,15 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 	is_waited_int = 0;
 	loop_id = 0;
 
+
 	while(vpu_IsBusy())
 	{
 		//err = dec_fill_bsbuffer(dec, STREAM_FILL_SIZE, &eos, &fill_end_bs);
+
+		timer_start;
 		err = fill_bsbuffer(dec, 0, &eos, &fill_end_bs);
+		timer_stop;
+
 		if(err < 0)
 		{
 			fputs("dec_fill_bsbuffer failed\n", stderr);
@@ -418,8 +403,8 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 
 	if(!is_waited_int)
 		vpu_WaitForInt(500);
-
 	ret = vpu_DecGetOutputInfo(handle, &outinfo);
+
 
 	if(outinfo.indexFrameDisplay == 0)
 	{
@@ -471,6 +456,7 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 		return 0;
 	}
 
+
 	actual_display_index = rotid;
 //	actual_display_index = 0;
 
@@ -503,4 +489,40 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 void vpu_display(DecodingInstance dec)
 {
 	v4l_put_data(dec->disp, dec->rot_buf_count, V4L2_FIELD_NONE, 30);
+}
+
+
+static int vpu_decoding_thread(DecodingInstance dec)
+{
+	int ret;
+	unsigned char* frame = NULL;
+
+	dec->run_thread = 1;
+	while(dec->run_thread)
+	{
+		ret = vpu_decode_one_frame(dec, &frame);
+		if(ret == -1) continue;
+		queue_push(dec->output_queue, frame);
+		vpu_display(dec);
+	}
+}
+
+void vpu_start_decoding(DecodingInstance dec)
+{
+	fprintf(stderr, "dec->buffer_size == %d\n", dec->buffer_size);
+	dec->output_queue = queue_new(dec->buffer_size, VPU_DECODING_QUEUE_SIZE);
+	pthread_create(&dec->thread, NULL, vpu_decoding_thread, dec);
+}
+
+void vpu_stop_decoding(DecodingInstance dec)
+{
+	int ret;
+	dec->run_thread = 0;
+	pthread_join(dec->thread, &ret);
+	queue_delete(&dec->output_queue);
+}
+
+queue vpu_get_decode_queue(DecodingInstance dec)
+{
+	return dec->output_queue;
 }
