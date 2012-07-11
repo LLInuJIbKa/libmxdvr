@@ -63,8 +63,22 @@ size_t v4l2dev_get_buffersize(v4l2dev device);
  */
 int v4l2dev_read(v4l2dev device, unsigned char* output);
 
+/**
+ * @brief Start enqueuing thread.
+ * @param device Target V4L2 device
+ */
 void v4l2dev_start_enqueuing(v4l2dev device);
+
+/**
+ * @brief Stop enqueuing thread.
+ * @param device Target V4L2 device
+ */
 void v4l2dev_stop_enqueuing(v4l2dev device);
+
+/**
+ * @brief Get the queue object.
+ * @param device Target V4L2 device
+ */
 queue v4l2dev_get_queue(v4l2dev device);
 
 #endif /* V4L2DEV_H_ */

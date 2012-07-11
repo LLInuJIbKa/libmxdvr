@@ -66,6 +66,7 @@ struct rot
 };
 
 struct vpu_display* v4l_display_open(struct DecodingInstance *dec, int nframes, int w, int h, int x, int y);
+void v4l_display_close(struct vpu_display *disp);
 int v4l_put_data(struct vpu_display *disp, int index, int field, int fps);
 
 

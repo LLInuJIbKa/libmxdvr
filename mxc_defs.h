@@ -9,13 +9,8 @@
 #include <stdint.h>
 #include <pthread.h>
 
-//#define STREAM_BUF_SIZE		(0x200000)
 #define STREAM_BUF_SIZE		(0x100000)
 #define PS_SAVE_SIZE		(0x080000)
-#define STREAM_END_SIZE		(0)
-#define SIZE_USER_BUF		(0x1000)
-#define STREAM_FILL_SIZE	(0x40000)
-
 #define MJPG_BUFFER_SIZE	(0x40000)
 
 #ifndef u32
@@ -24,6 +19,10 @@ typedef Uint32 u32;
 typedef unsigned short u16;
 typedef unsigned char u8;
 
+/**
+ * @brief Instance object for decoding
+ * @details You should <b>NOT</b> access this data structure directly.
+ */
 struct DecodingInstance
 {
 	DecHandle handle;
@@ -47,8 +46,6 @@ struct DecodingInstance
 	Rect picCropRect;
 	int reorderEnable;
 
-	DecReportInfo mbInfo;
-	DecReportInfo mvInfo;
 	DecReportInfo frameBufStat;
 	DecReportInfo userData;
 
@@ -56,15 +53,8 @@ struct DecodingInstance
 	vpu_mem_desc ps_mem_desc;
 	vpu_mem_desc slice_mem_desc;
 
-
-	v4l2dev device;
 	int fps;
 	DecParam decparam;
-
-
-	int fd;
-
-	unsigned char* buffer;
 	int buffer_size;
 
 	pthread_t thread;
@@ -112,10 +102,6 @@ struct EncodingInstance
 	/** @brief Allocated fb pointers are stored here */
 	struct frame_buf **pfbpool;
 
-	EncReportInfo mbInfo;
-	EncReportInfo mvInfo;
-	EncReportInfo sliceInfo;
-
 	vpu_mem_desc mem_desc;
 	int fd;
 	EncParam enc_param;
@@ -126,5 +112,7 @@ struct EncodingInstance
 	int run_thread;
 
 };
+
+extern pthread_mutex_t vpu_mutex;
 
 #endif /* MXC_DEFS_H_ */

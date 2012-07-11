@@ -8,37 +8,6 @@
 #include "mxc_display.h"
 #include "font.h"
 
-static int freadn(int fd, void *vptr, size_t n)
-{
-	int nleft = 0;
-	int nread = 0;
-	char *ptr;
-
-	ptr = vptr;
-	nleft = n;
-	while(nleft > 0)
-	{
-		if((nread = read(fd, ptr, nleft)) <= 0)
-		{
-			if(nread == 0)
-				return (n - nleft);
-
-			perror("read");
-			return (-1);
-		}
-
-		nleft -= nread;
-		ptr += nread;
-	}
-
-	return (nread);
-}
-
-static int vpu_read(int fd, char *buf, int n)
-{
-	return freadn(fd, buf, n);
-}
-
 
 static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *fill_end_bs)
 {
@@ -46,12 +15,11 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 	DecHandle handle = dec->handle;
 	PhysicalAddress pa_read_ptr, pa_write_ptr;
 	u32 target_addr;
-	int size;
 	int nread;
 	u32 bs_va_startaddr = dec->virt_bsbuf_addr;
 	u32 bs_va_endaddr = dec->virt_bsbuf_addr + STREAM_BUF_SIZE;
 	u32 bs_pa_startaddr = dec->phy_bsbuf_addr;
-	int space = 0;
+	Uint32 space = 0;
 	u32 room;
 	unsigned char* ptr = NULL;
 	*eos = 0;
@@ -67,17 +35,8 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 		return 0;
 
 
-	//memset(dec->buffer, 0, MJPG_BUFFER_SIZE);
-
 	while(!(ptr = queue_pop(dec->input_queue)))
-	{
 		usleep(0);
-	}
-
-
-	//memcpy(dec->buffer, ptr, MJPG_BUFFER_SIZE);
-
-	if(nread == -1) return 0;
 
 	nread = MJPG_BUFFER_SIZE;
 
@@ -89,15 +48,12 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 	if((target_addr + nread) > bs_va_endaddr)
 	{
 		room = bs_va_endaddr - target_addr;
-//		memcpy((void*)target_addr, dec->buffer, room);
-//		memcpy((void*)bs_va_startaddr, dec->buffer+room, nread - room);
 		memcpy((void*)target_addr, ptr, room);
 		memcpy((void*)bs_va_startaddr, ptr+room, nread - room);
 
 	}
 	else
 	{
-//		memcpy((void*)target_addr, dec->buffer, nread);
 		memcpy((void*)target_addr, ptr, nread);
 	}
 
@@ -212,8 +168,6 @@ static int decoder_allocate_framebuffer(DecodingInstance dec)
 	struct vpu_display *disp = NULL;
 	int stride, divX, divY;
 	vpu_mem_desc *mvcol_md = NULL;
-	struct rot rotation = {};
-
 
 	totalfb = fbcount + dec->extrafb;
 
@@ -224,9 +178,8 @@ static int decoder_allocate_framebuffer(DecodingInstance dec)
 
 	disp = v4l_display_open(dec, totalfb, 1024, 768, 0, 0);
 
-	if (disp == NULL) {
+	if(disp == NULL)
 		goto err;
-	}
 
 	divX = (dec->mjpg_fmt == MODE420 || dec->mjpg_fmt == MODE422) ? 2 : 1;
 	divY = (dec->mjpg_fmt == MODE420 || dec->mjpg_fmt == MODE224) ? 2 : 1;
@@ -260,9 +213,7 @@ static int decoder_allocate_framebuffer(DecodingInstance dec)
 	ret = vpu_DecRegisterFrameBuffer(handle, fb, fbcount, stride, &bufinfo);
 
 	if(ret != RETCODE_SUCCESS)
-	{
 		goto err1;
-	}
 
 	dec->disp = disp;
 	return 0;
@@ -297,10 +248,8 @@ DecodingInstance vpu_create_decoding_instance_for_v4l2(queue input)
 	dec->virt_bsbuf_addr = dec->mem_desc.virt_uaddr;
 	dec->reorderEnable = 1;
 	dec->input_queue = input;
-	dec->buffer = calloc(1, MJPG_BUFFER_SIZE);
 
 	decoder_open(dec);
-	//dec_fill_bsbuffer(dec, fillsize, &eos, &fill_end_bs);
 	fill_bsbuffer(dec, 1, &eos, &fill_end_bs);
 	decoder_parse(dec);
 
@@ -323,9 +272,6 @@ DecodingInstance vpu_create_decoding_instance_for_v4l2(queue input)
 	vpu_DecGiveCommand(dec->handle, SET_MIRROR_DIRECTION, &mirror);
 	vpu_DecGiveCommand(dec->handle, SET_ROTATOR_STRIDE, &rot_stride);
 
-
-	//img_size = dec->picwidth * dec->picheight * 3 / 2;
-
 	return dec;
 }
 
@@ -340,14 +286,9 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 	int loop_id;
 	double frame_id = 0;
 	int disp_clr_index = -1, actual_display_index = -1;
-	struct frame_buf **pfbpool = dec->pfbpool;
-	struct frame_buf *pfb = NULL;
-	unsigned char* yuv_addr;
 	int decIndex = 0;
 	int err = 0, eos = 0, fill_end_bs = 0, decodefinish = 0;
 	struct vpu_display *disp = dec->disp;
-	int field = V4L2_FIELD_NONE;
-
 
 	vpu_DecGiveCommand(handle, SET_ROTATOR_OUTPUT, (void *)&fb[rotid]);
 	pthread_mutex_lock(&vpu_mutex);
@@ -365,7 +306,6 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 
 	while(vpu_IsBusy())
 	{
-		//err = dec_fill_bsbuffer(dec, STREAM_FILL_SIZE, &eos, &fill_end_bs);
 		err = fill_bsbuffer(dec, 0, &eos, &fill_end_bs);
 
 		if(err < 0)
@@ -444,28 +384,8 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 		return 0;
 	}
 
-
 	actual_display_index = rotid;
-//	actual_display_index = 0;
-
-//
-//	{
-//		pfb = pfbpool[actual_display_index];
-//
-//		yuv_addr = (unsigned char*)(pfb->addrY + pfb->desc.virt_uaddr - pfb->desc.phy_addr);
-//
-//		/* Memory copying on physical address is slow */
-//		//memcpy(output, (unsigned char*)yuv_addr, img_size);
-//		*output = yuv_addr;
-//
-//		disp_clr_index = outinfo.indexFrameDisplay;
-//	}
-//
-	//fprintf(stderr, "memcpy %d bytes from 0x%X\n", disp->buffers[actual_display_index]->length, disp->buffers[actual_display_index]->start);
-	//memcpy(*output, disp->buffers[actual_display_index]->start, disp->buffers[actual_display_index]->length);
 	*output = disp->buffers[actual_display_index]->start;
-//	v4l_put_data(disp, actual_display_index, field, 25);
-//	fprintf(stderr, "%d\n", rotid);
 
 	rotid++;
 	rotid %= dec->fbcount;
@@ -498,6 +418,8 @@ static int vpu_decoding_thread(DecodingInstance dec)
 		ret = vpu_decode_one_frame(dec, &frame);
 		if(!frame) continue;
 
+		/* Draw OSD */
+
 		time(&rawtime);
 		timeinfo = localtime(&rawtime);
 		strftime(timestring, 255, "%p %l:%M:%S %Y/%m/%d", timeinfo);
@@ -510,19 +432,20 @@ static int vpu_decoding_thread(DecodingInstance dec)
 	}
 
 	text_layout_destroy(text);
+	return 0;
 }
 
 void vpu_start_decoding(DecodingInstance dec)
 {
 	dec->output_queue = queue_new(dec->buffer_size, VPU_DECODING_QUEUE_SIZE);
-	pthread_create(&dec->thread, NULL, vpu_decoding_thread, dec);
+	pthread_create(&dec->thread, NULL, (void*)vpu_decoding_thread, (void**)dec);
 }
 
 void vpu_stop_decoding(DecodingInstance dec)
 {
 	int ret;
 	dec->run_thread = 0;
-	pthread_join(dec->thread, &ret);
+	pthread_join(dec->thread, (void**)&ret);
 	queue_delete(&dec->output_queue);
 }
 

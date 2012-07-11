@@ -7,19 +7,6 @@
 #include "mxc_defs.h"
 #include "mxc_vpu.h"
 
-#define timer_start; \
-{\
-	struct timeval ts, te;\
-	int elapsed;\
-	gettimeofday(&ts, NULL);
-
-#define timer_stop; \
-	gettimeofday(&te, NULL);\
-	elapsed = (te.tv_sec - ts.tv_sec) * 1000000 + (te.tv_usec - ts.tv_usec);\
-	fprintf(stderr, "encoding %d ms\n", elapsed/1000);\
-}
-
-
 static int vpu_write(int fd, char *vptr, int n)
 {
 	int nleft;
@@ -106,9 +93,7 @@ static int encoder_open(struct EncodingInstance *instance)
 
 	ret = vpu_EncOpen(&handle, &encop);
 	if(ret != RETCODE_SUCCESS)
-	{
 		return -1;
-	}
 
 	instance->handle = handle;
 	return 0;
@@ -128,9 +113,6 @@ static int encoder_configure(struct EncodingInstance* instance)
 	}
 
 	instance->fbcount = instance->src_fbid = initinfo.minFrameBufferCount;
-	instance->mbInfo.enable = 0;
-	instance->mvInfo.enable = 0;
-	instance->sliceInfo.enable = 0;
 
 	return 0;
 }
@@ -383,17 +365,18 @@ static int vpu_encoding_thread(EncodingInstance instance)
 	}
 
 	free(frame420);
+	return 0;
 }
 
 void vpu_start_encoding(EncodingInstance instance, queue input)
 {
 	instance->input_queue = input;
-	pthread_create(&instance->thread, NULL, vpu_encoding_thread, instance);
+	pthread_create(&instance->thread, NULL, (void*)vpu_encoding_thread, (void**)instance);
 }
 
 void vpu_stop_encoding(EncodingInstance instance)
 {
 	int ret;
 	instance->run_thread = 0;
-	pthread_join(instance->thread, &ret);
+	pthread_join(instance->thread, (void**)&ret);
 }

@@ -15,14 +15,6 @@
 typedef struct EncodingInstance* EncodingInstance;
 typedef struct DecodingInstance* DecodingInstance;
 
-typedef enum
-{
-	FILENAME,
-	MEMORYBLOCK
-}InputType;
-
-extern pthread_mutex_t vpu_mutex;
-
 /**
  * @brief Initialize VPU.
  */

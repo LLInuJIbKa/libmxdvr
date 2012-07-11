@@ -235,8 +235,6 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 	device->ipu_handle = ipu_init(device->width, device->height, IPU_PIX_FMT_YUYV, device->width, device->height, IPU_PIX_FMT_YUV420P, 0);
 #endif
 
-//	device->decoding = vpu_create_decoding_instance(device->buffer, MEMORYBLOCK, STD_MJPG);
-
 }
 
 void v4l2dev_close(v4l2dev* device)
@@ -336,7 +334,6 @@ int v4l2dev_read(v4l2dev device, unsigned char* output)
 #ifdef USE_FMT_MJPG
 
 		memcpy(output, device->mmap_buffers[buf.index], buf.bytesused);
-
 		//jpeg_to_raw(device->mmap_buffers[buf.index], buf.bytesused, device->buffer);
 
 #else
@@ -374,14 +371,14 @@ static int v4l2dev_thread(v4l2dev device)
 void v4l2dev_start_enqueuing(v4l2dev device)
 {
 	device->mjpg_queue = queue_new(V4L2DEV_BUFFER_SIZE, V4L2DEV_QUEUE_SIZE);
-	pthread_create(&device->thread, NULL, v4l2dev_thread, device);
+	pthread_create(&device->thread, NULL, (void*)v4l2dev_thread, (void**)device);
 }
 
 void v4l2dev_stop_enqueuing(v4l2dev device)
 {
 	int ret;
 	device->run_thread = 0;
-	pthread_join(device->thread, &ret);
+	pthread_join(device->thread, (void**)(&ret));
 	queue_delete(&device->mjpg_queue);
 }
 

@@ -1,7 +1,7 @@
 CC=/opt/toolchain/bin/arm-none-linux-gnueabi-gcc 
 ROOTFS:=/media/SmartHome_SD
 TARGET_SHARED_OBJECT:=libmxdvr.so 
-SOURCE_FILES:=v4l2dev.c mxc_vpu.c mxc_vpu_encoder.c mxc_vpu_decoder.c mxc_display.c platform.c font.c framebuf.c mjpeg.c mxc_ipu.c queue.c
+SOURCE_FILES:=v4l2dev.c mxc_vpu.c mxc_vpu_encoder.c mxc_vpu_decoder.c mxc_display.c platform.c font.c framebuf.c queue.c
 OBJECTS:=$(subst .c,.o, $(SOURCE_FILES))
 
 
@@ -19,10 +19,10 @@ CFLAGS:=-pipe -O3 -fPIC -Wall -march=armv6 $(INCLUDE_DIRS)
 LDFLAGS:=-Wall -L$(ROOTFS)/usr/lib $(LINK_LIBRARIES) --sysroot=$(ROOTFS) 
 
 
-all: $(TARGET_SHARED_OBJECT) v4l2test
+all: $(TARGET_SHARED_OBJECT) dvrdemo
 
 clean:
-	rm -f $(TARGET_SHARED_OBJECT) *.o v4l2test
+	rm -f $(TARGET_SHARED_OBJECT) *.o dvrdemo
 
 %.o: %.c
 	@echo "  CC	$@"
@@ -32,7 +32,7 @@ $(TARGET_SHARED_OBJECT): $(OBJECTS)
 	@echo "  LD	$@"
 	@$(CC) -shared $(LDFLAGS) $^ -o $@
 
-v4l2test: v4l2test.o $(OBJECTS)#$(TARGET_SHARED_OBJECT)
+dvrdemo: dvrdemo.o $(TARGET_SHARED_OBJECT)
 	@echo "  LD	$@"
-	#@$(CC) -L./ $(LDFLAGS) -lmxdvr $^ -o $@
-	@$(CC) -L./ $(LDFLAGS) $^ -o $@
+	@$(CC) -L./ $(LDFLAGS) -lmxdvr $< -o $@
+	#@$(CC) -L./ $(LDFLAGS) $^ -o $@

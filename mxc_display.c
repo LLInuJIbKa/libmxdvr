@@ -25,10 +25,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
-//#include <linux/mxcfb.h>
 #include "mxc_display.h"
 #include "mxc_defs.h"
-//#include <linux/ipu.h>
 #include <linux/mxc_v4l2.h>
 
 #define V4L2_MXC_ROTATE_NONE                    0
@@ -154,7 +152,7 @@ void v4l_disp_loop_thread(void *arg)
 			gettimeofday(&ts, NULL);
 			ts.tv_usec +=100000; // 100ms
 
-		} while ((sem_timedwait(&disp->avaiable_dequeue_frame, &ts) != 0) && !quitflag);
+		} while ((sem_timedwait(&disp->avaiable_dequeue_frame, (struct timespec*)&ts) != 0) && !quitflag);
 		if (quitflag)
 			break;
 
@@ -180,7 +178,6 @@ void v4l_disp_loop_thread(void *arg)
 void ipu_disp_loop_thread(void *arg)
 {
 	struct DecodingInstance *dec = (struct DecodingInstance *)arg;
-	DecHandle handle = dec->handle;
 	struct vpu_display *disp = dec->disp;
 	int index = -1, disp_clr_index, tmp_idx[3] = {0,0,0}, err, mode;
 	pthread_attr_t attr;
@@ -352,7 +349,7 @@ ipu_display_open(struct DecodingInstance *dec, int nframes, int w, int h, int x,
 	pthread_cond_init(&ipu_cond, NULL);
 
 	/* start disp loop thread */
-	pthread_create(&(disp->ipu_disp_loop_thread), NULL, ipu_disp_loop_thread, (void *)dec);
+	pthread_create(&(disp->ipu_disp_loop_thread), NULL, (void*)ipu_disp_loop_thread, (void *)dec);
 
 	return disp;
 }
@@ -409,62 +406,21 @@ void v4l_free_bufs(int n, struct vpu_display *disp)
 	}
 }
 
-static int
-calculate_ratio(int width, int height, int maxwidth, int maxheight)
-{
-	int i, tmp, ratio, compare;
-
-	i = ratio = 1;
-	if (width >= height) {
-		tmp = width;
-		compare = maxwidth;
-	} else {
-		tmp = height;
-		compare = maxheight;
-	}
-
-	if (width <= maxwidth && height <= maxheight) {
-		ratio = 1;
-	} else {
-		while (tmp > compare) {
-			ratio = (1 << i);
-			tmp /= ratio;
-			i++;
-		}
-	}
-
-	return ratio;
-}
-
 struct vpu_display* v4l_display_open(struct DecodingInstance *dec, int nframes, int w, int h, int x, int y)
 {
-//	struct rot rotation = {};
-//	Rect cropRect = {};
+
 	int width = dec->picwidth;
 	int height = dec->picheight;
-//	int left = cropRect.left;
-//	int top = cropRect.top;
-//	int right = cropRect.right;
-//	int bottom = cropRect.bottom;
-	int disp_width = w;
-	int disp_height = h;
-	int disp_left =  x;
-	int disp_top =  y;
+
 	int fd = -1, err = 0, out = 0, i = 0;
 	char v4l_device[32] = "/dev/video16";
-	struct v4l2_cropcap cropcap = {};
-	struct v4l2_crop crop = {};
-	struct v4l2_framebuffer fb = {};
 	struct v4l2_format fmt = {};
 	struct v4l2_requestbuffers reqbuf = {};
-	struct v4l2_mxc_offset off = {};
 	struct vpu_display *disp;
 	int fd_fb;
-	char *tv_mode, *test_mode;
+	char *tv_mode;
 	char motion_mode = 0;
 	struct mxcfb_gbl_alpha alpha;
-
-	int ratio = 1;
 
 	if (cpu_is_mx27()) {
 		out = 0;
