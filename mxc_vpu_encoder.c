@@ -255,6 +255,8 @@ EncodingInstance vpu_create_encoding_instance(const int src_width, const int src
 	instance->phy_bsbuf_addr = instance->mem_desc.phy_addr;
 	instance->src_picwidth = src_width;
 	instance->src_picheight = src_height;
+//	instance->enc_picwidth = 640;
+//	instance->enc_picheight = 480;
 	instance->fd = open(filename, O_CREAT | O_RDWR | O_TRUNC, S_IRWXU | S_IRWXG | S_IRWXO);
 
 	encoder_open(instance);
@@ -284,14 +286,20 @@ int vpu_encode_one_frame(EncodingInstance instance, const unsigned char* data)
 	u32 yuv_addr;
 
 	yuv_addr = instance->pfbpool[src_fbid]->addrY + instance->pfbpool[src_fbid]->desc.virt_uaddr - instance->pfbpool[src_fbid]->desc.phy_addr;
+
 	memcpy((unsigned char*)yuv_addr, data, instance->input_size);
 
+	pthread_mutex_lock(&vpu_mutex);
 	ret = vpu_EncStartOneFrame(handle, &(instance->enc_param));
 
 	while(vpu_IsBusy())
+	{
+		usleep(0);
 		vpu_WaitForInt(200);
+	}
 
 	ret = vpu_EncGetOutputInfo(handle, &outinfo);
+	pthread_mutex_unlock(&vpu_mutex);
 
 	vbuf = (instance->virt_bsbuf_addr + outinfo.bitstreamBuffer - instance->phy_bsbuf_addr);
 	ret = vpu_write(instance->fd, (void*)vbuf, outinfo.bitstreamSize);
@@ -368,9 +376,9 @@ static int vpu_encoding_thread(EncodingInstance instance)
 	while(instance->run_thread)
 	{
 		while(!(frame422 = queue_pop(instance->input_queue)))
-			usleep(20000);
-		//convert_yuv422p_to_yuv420p(frame422, frame420, instance->src_picwidth, instance->src_picheight);
-		vpu_encode_one_frame(instance, frame422);
+			usleep(0);
+		convert_yuv422p_to_yuv420p(frame422, frame420, instance->src_picwidth, instance->src_picheight);
+		vpu_encode_one_frame(instance, frame420);
 
 	}
 

@@ -10,7 +10,7 @@
 #include <pthread.h>
 
 //#define STREAM_BUF_SIZE		(0x200000)
-#define STREAM_BUF_SIZE		(0x200000)
+#define STREAM_BUF_SIZE		(0x100000)
 #define PS_SAVE_SIZE		(0x080000)
 #define STREAM_END_SIZE		(0)
 #define SIZE_USER_BUF		(0x1000)

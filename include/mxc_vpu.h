@@ -21,6 +21,7 @@ typedef enum
 	MEMORYBLOCK
 }InputType;
 
+extern pthread_mutex_t vpu_mutex;
 
 /**
  * @brief Initialize VPU.

@@ -12,6 +12,7 @@ struct queue
 	int first;
 	int available;
 	pthread_mutex_t mutex;
+	int locked;
 };
 
 queue queue_new(int buffer_size, int queue_size)
@@ -34,6 +35,7 @@ queue queue_new(int buffer_size, int queue_size)
 		ptr->buffers[i] = calloc(1, buffer_size);
 
 	pthread_mutex_init(&ptr->mutex, NULL);
+	ptr->locked = 0;
 	return ptr;
 }
 
@@ -61,6 +63,7 @@ void queue_push(queue q, unsigned char* data)
 	if(!q||!q->available) return;
 
 	pthread_mutex_lock(&q->mutex);
+	q->locked = 1;
 
 	index = q->first + (q->queue_size - q->available);
 	q->available--;
@@ -68,7 +71,9 @@ void queue_push(queue q, unsigned char* data)
 	index %= q->queue_size;
 
 	memcpy(q->buffers[index], data, q->buffer_size);
+
 	pthread_mutex_unlock(&q->mutex);
+	q->locked = 0;
 
 }
 
@@ -76,7 +81,7 @@ unsigned char* queue_pop(queue q)
 {
 	int index;
 
-	if(!q||q->available == q->queue_size) return NULL;
+	if(!q||q->available == q->queue_size||q->locked) return NULL;
 
 	pthread_mutex_lock(&q->mutex);
 

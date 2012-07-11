@@ -2,25 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-//#include <fcntl.h>
-//#include <sys/stat.h>
 #include <errno.h>
-//#include <linux/videodev2.h>
 #include "mxc_defs.h"
 #include "mxc_vpu.h"
 #include "mxc_display.h"
-
-#define timer_start; \
-{\
-	struct timeval ts, te;\
-	int elapsed;\
-	gettimeofday(&ts, NULL);
-
-#define timer_stop; \
-	gettimeofday(&te, NULL);\
-	elapsed = (te.tv_sec - ts.tv_sec) * 1000000 + (te.tv_usec - ts.tv_usec);\
-	fprintf(stderr, "encoding %d ms\n", elapsed/1000);\
-}
+#include "font.h"
 
 static int freadn(int fd, void *vptr, size_t n)
 {
@@ -81,7 +67,7 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 		return 0;
 
 
-	memset(dec->buffer, 0, MJPG_BUFFER_SIZE);
+	//memset(dec->buffer, 0, MJPG_BUFFER_SIZE);
 
 	while(!(ptr = queue_pop(dec->input_queue)))
 	{
@@ -89,7 +75,7 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 	}
 
 
-	memcpy(dec->buffer, ptr, 262144);
+	//memcpy(dec->buffer, ptr, MJPG_BUFFER_SIZE);
 
 	if(nread == -1) return 0;
 
@@ -103,12 +89,16 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 	if((target_addr + nread) > bs_va_endaddr)
 	{
 		room = bs_va_endaddr - target_addr;
-		memcpy((void*)target_addr, dec->buffer, room);
-		memcpy((void*)bs_va_startaddr, dec->buffer+room, nread - room);
+//		memcpy((void*)target_addr, dec->buffer, room);
+//		memcpy((void*)bs_va_startaddr, dec->buffer+room, nread - room);
+		memcpy((void*)target_addr, ptr, room);
+		memcpy((void*)bs_va_startaddr, ptr+room, nread - room);
+
 	}
 	else
 	{
-		memcpy((void*)target_addr, dec->buffer, nread);
+//		memcpy((void*)target_addr, dec->buffer, nread);
+		memcpy((void*)target_addr, ptr, nread);
 	}
 
 	vpu_DecUpdateBitstreamBuffer(handle, nread);
@@ -360,7 +350,7 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 
 
 	vpu_DecGiveCommand(handle, SET_ROTATOR_OUTPUT, (void *)&fb[rotid]);
-
+	pthread_mutex_lock(&vpu_mutex);
 	ret = vpu_DecStartOneFrame(handle, &(dec->decparam));
 
 	if(ret != RETCODE_SUCCESS)
@@ -376,10 +366,7 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 	while(vpu_IsBusy())
 	{
 		//err = dec_fill_bsbuffer(dec, STREAM_FILL_SIZE, &eos, &fill_end_bs);
-
-		timer_start;
 		err = fill_bsbuffer(dec, 0, &eos, &fill_end_bs);
-		timer_stop;
 
 		if(err < 0)
 		{
@@ -404,7 +391,7 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 	if(!is_waited_int)
 		vpu_WaitForInt(500);
 	ret = vpu_DecGetOutputInfo(handle, &outinfo);
-
+	pthread_mutex_unlock(&vpu_mutex);
 
 	if(outinfo.indexFrameDisplay == 0)
 	{
@@ -421,6 +408,7 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 	if(outinfo.decodingSuccess == 0)
 	{
 		fprintf(stderr, "Incomplete finish of decoding process.\n\tframe_id = %d\n", (int)frame_id);
+		*output = NULL;
 		return -1;
 	}
 
@@ -495,21 +483,37 @@ void vpu_display(DecodingInstance dec)
 static int vpu_decoding_thread(DecodingInstance dec)
 {
 	int ret;
+	char timestring[256] = { };
+	time_t rawtime;
+	struct tm* timeinfo;
+	text_layout text = NULL;
 	unsigned char* frame = NULL;
+
+	text = text_layout_create(280, 30);
+	text_layout_set_font(text, "Liberation Mono", 24);
 
 	dec->run_thread = 1;
 	while(dec->run_thread)
 	{
 		ret = vpu_decode_one_frame(dec, &frame);
-		if(ret == -1) continue;
+		if(!frame) continue;
+
+		time(&rawtime);
+		timeinfo = localtime(&rawtime);
+		strftime(timestring, 255, "%p %l:%M:%S %Y/%m/%d", timeinfo);
+		text_layout_render_markup_text(text, timestring);
+		text_layout_copy_to_yuv422p(text, 50, 50, frame, dec->picwidth, dec->picheight);
+
+
 		queue_push(dec->output_queue, frame);
 		vpu_display(dec);
 	}
+
+	text_layout_destroy(text);
 }
 
 void vpu_start_decoding(DecodingInstance dec)
 {
-	fprintf(stderr, "dec->buffer_size == %d\n", dec->buffer_size);
 	dec->output_queue = queue_new(dec->buffer_size, VPU_DECODING_QUEUE_SIZE);
 	pthread_create(&dec->thread, NULL, vpu_decoding_thread, dec);
 }
