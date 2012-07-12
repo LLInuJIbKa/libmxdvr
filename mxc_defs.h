@@ -38,20 +38,16 @@ struct DecodingInstance
 	int fbcount;
 	int minFrameBufferCount;
 	int rot_buf_count;
-	int extrafb;
 	FrameBuffer *fb;
 	struct frame_buf **pfbpool;
 	struct vpu_display *disp;
 	vpu_mem_desc *mvcol_memdesc;
 	Rect picCropRect;
-	int reorderEnable;
 
 	DecReportInfo frameBufStat;
 	DecReportInfo userData;
 
 	vpu_mem_desc mem_desc;
-	vpu_mem_desc ps_mem_desc;
-	vpu_mem_desc slice_mem_desc;
 
 	int fps;
 	DecParam decparam;

@@ -67,6 +67,7 @@ int main(int argc, char **argv)
 	vpu_stop_encoding(encoding);
 	vpu_stop_decoding(decoding);
 	vpu_close_encoding_instance(&encoding);
+	vpu_close_decoding_instance(&decoding);
 	vpu_uninit();
 
 	v4l2dev_stop_enqueuing(device);

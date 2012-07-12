@@ -9,9 +9,6 @@
 #include "v4l2dev.h"
 #include "queue.h"
 
-#define VPU_DECODING_QUEUE_SIZE	(16)
-
-
 typedef struct EncodingInstance* EncodingInstance;
 typedef struct DecodingInstance* DecodingInstance;
 
@@ -46,15 +43,62 @@ int vpu_encode_one_frame(EncodingInstance instance, const unsigned char* data);
  */
 void vpu_close_encoding_instance(EncodingInstance* instance);
 
-
-DecodingInstance vpu_create_decoding_instance_for_v4l2(queue input);
-int vpu_decode_one_frame(DecodingInstance instance, unsigned char** output);
-void vpu_display(DecodingInstance dec);
-void vpu_start_decoding(DecodingInstance dec);
-void vpu_stop_decoding(DecodingInstance dec);
-queue vpu_get_decode_queue(DecodingInstance dec);
+/**
+ * @brief Start encoding thread.
+ * @param instance Pointer to the instance
+ * @param input Input queue
+ */
 void vpu_start_encoding(EncodingInstance instance, queue input);
+
+/**
+ * @brief Stop encoding thread.
+ * @param instance Pointer to the instance
+ */
 void vpu_stop_encoding(EncodingInstance instance);
 
+/**
+ * @brief Create an instance object for decoding.
+ * @param input Input queue
+ * @retval DecodingInstance object
+ */
+DecodingInstance vpu_create_decoding_instance_for_v4l2(queue input);
+
+/**
+ * @brief Close and delete an instance object for decoding.
+ * @param instance Pointer to the instance
+ */
+void vpu_close_decoding_instance(DecodingInstance* instance);
+
+/**
+ * @brief Decode a JPEG frame.
+ * @param instance Pointer to the instance
+ * @param output Pointer to output image
+ */
+int vpu_decode_one_frame(DecodingInstance instance, unsigned char** output);
+
+/**
+ * @brief Display decoded image.
+ * @param instance Pointer to the instance
+ */
+void vpu_display(DecodingInstance instance);
+
+/**
+ * @brief Start decoding thread.
+ * @param instance Pointer to the instance
+ */
+void vpu_start_decoding(DecodingInstance instance);
+
+/**
+ * @brief Stop decoding thread.
+ * @param instance Pointer to the instance
+ */
+void vpu_stop_decoding(DecodingInstance instance);
+
+/**
+ * @brief Get output queue.
+ * @param instance Pointer to the instance
+ * @retval Output queue
+ */
+queue vpu_get_decode_queue(DecodingInstance instance);
 
 #endif /* MXC_VPU_H_ */

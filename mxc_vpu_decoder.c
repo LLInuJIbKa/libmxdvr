@@ -8,6 +8,7 @@
 #include "mxc_display.h"
 #include "font.h"
 
+#define VPU_DECODING_QUEUE_SIZE	(16)
 
 static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *fill_end_bs)
 {
@@ -71,7 +72,7 @@ static int decoder_open(DecodingInstance dec)
 	oparam.bitstreamFormat = STD_MJPG;
 	oparam.bitstreamBuffer = dec->phy_bsbuf_addr;
 	oparam.bitstreamBufferSize = STREAM_BUF_SIZE;
-	oparam.reorderEnable = dec->reorderEnable;
+	oparam.reorderEnable = 1;
 	oparam.mp4DeblkEnable = 0;
 	oparam.chromaInterleave = 0;
 	oparam.mp4Class = 0;
@@ -169,7 +170,7 @@ static int decoder_allocate_framebuffer(DecodingInstance dec)
 	int stride, divX, divY;
 	vpu_mem_desc *mvcol_md = NULL;
 
-	totalfb = fbcount + dec->extrafb;
+	totalfb = fbcount;
 
 	fb = dec->fb = calloc(totalfb, sizeof(FrameBuffer));
 
@@ -246,7 +247,6 @@ DecodingInstance vpu_create_decoding_instance_for_v4l2(queue input)
 
 	dec->phy_bsbuf_addr = dec->mem_desc.phy_addr;
 	dec->virt_bsbuf_addr = dec->mem_desc.virt_uaddr;
-	dec->reorderEnable = 1;
 	dec->input_queue = input;
 
 	decoder_open(dec);
@@ -393,6 +393,70 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 	frame_id++;
 	return 0;
 }
+
+void vpu_close_decoding_instance(DecodingInstance* instance)
+{
+	DecodingInstance handle = *instance;
+	DecOutputInfo outinfo = {};
+	RetCode ret;
+	int i;
+	vpu_mem_desc *mvcol_md = handle->mvcol_memdesc;
+
+
+	ret = vpu_DecClose(handle->handle);
+	if(ret == RETCODE_FRAME_NOT_COMPLETE)
+	{
+		vpu_DecGetOutputInfo(handle->handle, &outinfo);
+		ret = vpu_DecClose(handle->handle);
+	}
+
+	if(handle->disp)
+	{
+		v4l_display_close(handle->disp);
+		handle->disp = NULL;
+	}
+
+	if(mvcol_md)
+	{
+		for(i = 0; i < handle->fbcount; i++)
+		{
+			if(mvcol_md[i].phy_addr)
+				IOFreePhyMem(&mvcol_md[i]);
+		}
+		if(handle->mvcol_memdesc)
+		{
+			free(handle->mvcol_memdesc);
+			handle->mvcol_memdesc = NULL;
+		}
+	}
+
+	if(handle->fb)
+	{
+		free(handle->fb);
+		handle->fb = NULL;
+	}
+	if(handle->pfbpool)
+	{
+		free(handle->pfbpool);
+		handle->pfbpool = NULL;
+	}
+
+	if(handle->frameBufStat.addr)
+		free(handle->frameBufStat.addr);
+
+	if(handle->userData.addr)
+		free(handle->userData.addr);
+
+	IOFreeVirtMem(&(handle->mem_desc));
+	IOFreePhyMem(&(handle->mem_desc));
+
+	free(handle);
+	*instance = NULL;
+}
+
+
+
+
 
 void vpu_display(DecodingInstance dec)
 {
