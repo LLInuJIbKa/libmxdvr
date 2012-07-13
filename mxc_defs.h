@@ -9,9 +9,8 @@
 #include <stdint.h>
 #include <pthread.h>
 
-#define STREAM_BUF_SIZE		(0x100000)
+#define STREAM_BUF_SIZE		(0x200000)
 #define PS_SAVE_SIZE		(0x080000)
-#define MJPG_BUFFER_SIZE	(0x40000)
 
 #ifndef u32
 typedef Uint32 u32;
@@ -51,7 +50,7 @@ struct DecodingInstance
 
 	int fps;
 	DecParam decparam;
-	int buffer_size;
+	int output_buffer_size;
 
 	pthread_t thread;
 	queue input_queue;

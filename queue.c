@@ -96,7 +96,10 @@ unsigned char* queue_pop(queue q)
 	return q->buffers[index];
 }
 
-
+int queue_get_buffer_size(queue q)
+{
+	return q->buffer_size;
+}
 
 
 

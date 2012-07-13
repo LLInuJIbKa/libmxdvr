@@ -35,6 +35,10 @@ void queue_push(queue q, unsigned char* data);
  */
 unsigned char* queue_pop(queue q);
 
+/**
+ * @brief Query single buffer size.
+ */
+int queue_get_buffer_size(queue q);
 
 
 #endif /* QUEUE_H_ */

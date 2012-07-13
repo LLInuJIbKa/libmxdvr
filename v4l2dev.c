@@ -353,7 +353,7 @@ int v4l2dev_read(v4l2dev device, unsigned char* output)
 
 static int v4l2dev_thread(v4l2dev device)
 {
-	unsigned char* tmp = calloc(1, V4L2DEV_BUFFER_SIZE);
+	unsigned char* tmp = calloc(1, queue_get_buffer_size(device->mjpg_queue));
 	int size;
 
 	device->run_thread = 1;

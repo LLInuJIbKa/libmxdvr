@@ -39,7 +39,7 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 	while(!(ptr = queue_pop(dec->input_queue)))
 		usleep(0);
 
-	nread = MJPG_BUFFER_SIZE;
+	nread = queue_get_buffer_size(dec->input_queue);
 
 	if(nread>space)
 	{
@@ -186,7 +186,7 @@ static int decoder_allocate_framebuffer(DecodingInstance dec)
 	divY = (dec->mjpg_fmt == MODE420 || dec->mjpg_fmt == MODE224) ? 2 : 1;
 
 	img_size = dec->stride * dec->picheight;
-	dec->buffer_size = img_size * (dec->mjpg_fmt == MODE422 ? 2.0 : 1.5);
+	dec->output_buffer_size = img_size * (dec->mjpg_fmt == MODE422 ? 2.0 : 1.5);
 
 
 	mvcol_md = dec->mvcol_memdesc = calloc(totalfb, sizeof(vpu_mem_desc));
@@ -501,7 +501,7 @@ static int vpu_decoding_thread(DecodingInstance dec)
 
 void vpu_start_decoding(DecodingInstance dec)
 {
-	dec->output_queue = queue_new(dec->buffer_size, VPU_DECODING_QUEUE_SIZE);
+	dec->output_queue = queue_new(dec->output_buffer_size, VPU_DECODING_QUEUE_SIZE);
 	pthread_create(&dec->thread, NULL, (void*)vpu_decoding_thread, (void**)dec);
 }
 
