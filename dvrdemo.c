@@ -43,6 +43,7 @@ int main(int argc, char **argv)
 	v4l2dev_start_enqueuing(device);
 	encoding = vpu_create_encoding_instance(CAPTURE_WIDTH, CAPTURE_HEIGHT, OUTPUT_MP4_FILENAME);
 	decoding = vpu_create_decoding_instance_for_v4l2(v4l2dev_get_queue(device));
+	vpu_decoding_show_time_stamp(decoding, 1);
 	vpu_start_decoding(decoding);
 	vpu_start_encoding(encoding, vpu_get_decode_queue(decoding));
 

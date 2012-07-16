@@ -101,4 +101,9 @@ void vpu_stop_decoding(DecodingInstance instance);
  */
 queue vpu_get_decode_queue(DecodingInstance instance);
 
+/**
+ * @brief Set it to true if you want to add timestamp string to decoded output.
+ */
+void vpu_decoding_show_time_stamp(DecodingInstance dec, int bool);
+
 #endif /* MXC_VPU_H_ */

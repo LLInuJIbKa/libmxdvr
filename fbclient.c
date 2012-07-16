@@ -14,22 +14,22 @@
 #define BUFFER_SIZE	(262144)
 
 static pthread_t fbclient_pthread;
+static int run;
 
 
-static int fbclient_thread(int arg)
+int fbclient_thread(int arg)
 {
 	int socketfd, read_bytes;
 	unsigned char* buffer;
-	unsigned char* output_ptr;
 	struct sockaddr_in address;
 	int jpg_size;
 	int remaining;
 	queue input;
-	DecodingInstance instance;
+	DecodingInstance instance = NULL;
+	int first = 1;
+
 
 	input = queue_new(BUFFER_SIZE, 8);
-	instance = vpu_create_decoding_instance_for_v4l2(input);
-
 
 	/* Create socket*/
 
@@ -53,13 +53,14 @@ static int fbclient_thread(int arg)
 
 	/* Recieve jpeg images and display on screen */
 
-	buffer = malloc(BUFFER_SIZE);
+	buffer = calloc(1, BUFFER_SIZE);
 	jpg_size = 0;
 
-	while(1)
+	run = 1;
+	while(run)
 	{
 		/* Get jpeg file size */
-
+		jpg_size = 0;
 		read_bytes = read(socketfd, &jpg_size, sizeof(int));
 
 		if(read_bytes == 0) break;
@@ -68,7 +69,7 @@ static int fbclient_thread(int arg)
 
 		remaining = jpg_size;
 
-		while(remaining)
+		while(remaining>0)
 		{
 			read_bytes = read(socketfd, &(buffer[jpg_size-remaining]), remaining);
 			remaining -= read_bytes;
@@ -77,10 +78,17 @@ static int fbclient_thread(int arg)
 
 		queue_push(input, buffer);
 
-		vpu_decode_one_frame(instance, &output_ptr);
-		vpu_display(instance);
+		if(first)
+		{
+			instance = vpu_create_decoding_instance_for_v4l2(input);
+			first = 0;
+
+			vpu_start_decoding(instance);
+		}
+
 	}
 
+	vpu_stop_decoding(instance);
 	free(buffer);
 	close(socketfd);
 
@@ -95,5 +103,6 @@ void fbclient_start(void)
 void fbclient_stop(void)
 {
 	int ret;
+	run = 0;
 	pthread_join(fbclient_pthread, (void**)&ret);
 }

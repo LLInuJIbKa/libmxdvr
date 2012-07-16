@@ -81,7 +81,8 @@ static int decoder_open(DecodingInstance dec)
 	oparam.psSaveBufferSize = PS_SAVE_SIZE;
 
 	ret = vpu_DecOpen(&handle, &oparam);
-	if (ret != RETCODE_SUCCESS) {
+	if(ret != RETCODE_SUCCESS)
+	{
 		fputs("vpu_DecOpen failed\n", stderr);
 		return -1;
 	}
@@ -484,12 +485,14 @@ static int vpu_decoding_thread(DecodingInstance dec)
 
 		/* Draw OSD */
 
-		time(&rawtime);
-		timeinfo = localtime(&rawtime);
-		strftime(timestring, 255, "%p %l:%M:%S %Y/%m/%d", timeinfo);
-		text_layout_render_markup_text(text, timestring);
-		text_layout_copy_to_yuv422p(text, 50, 50, frame, dec->picwidth, dec->picheight);
-
+		if(dec->show_timestamp)
+		{
+			time(&rawtime);
+			timeinfo = localtime(&rawtime);
+			strftime(timestring, 255, "%p %l:%M:%S %Y/%m/%d", timeinfo);
+			text_layout_render_markup_text(text, timestring);
+			text_layout_copy_to_yuv422p(text, 50, 50, frame, dec->picwidth, dec->picheight);
+		}
 
 		queue_push(dec->output_queue, frame);
 		vpu_display(dec);
@@ -516,4 +519,9 @@ void vpu_stop_decoding(DecodingInstance dec)
 queue vpu_get_decode_queue(DecodingInstance dec)
 {
 	return dec->output_queue;
+}
+
+void vpu_decoding_show_time_stamp(DecodingInstance dec, int bool)
+{
+	dec->show_timestamp = bool;
 }

@@ -11,6 +11,7 @@ int main(int argc, char **argv)
 	fd_set fds;
 	struct timeval tv = { 0L, 0L };
 
+	vpu_init();
 	fbclient_start();
 
 	while(1)
@@ -27,8 +28,11 @@ int main(int argc, char **argv)
 	/* Consume stdin */
 
 	scanf("%*c");
+	fputs("Quiting ...\n", stderr);
 
 	fbclient_stop();
+	vpu_uninit();
+
 
 	return EXIT_SUCCESS;
 }

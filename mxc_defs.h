@@ -56,6 +56,7 @@ struct DecodingInstance
 	queue input_queue;
 	queue output_queue;
 	int run_thread;
+	int show_timestamp;
 };
 
 /**
