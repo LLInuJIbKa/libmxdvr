@@ -3,8 +3,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "fbclient.h"
-
-
+#include "mxc_vpu.h"
 
 int main(int argc, char **argv)
 {

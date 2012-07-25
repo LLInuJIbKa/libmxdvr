@@ -49,13 +49,13 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 	if((target_addr + nread) > bs_va_endaddr)
 	{
 		room = bs_va_endaddr - target_addr;
-		memcpy((void*)target_addr, ptr, room);
-		memcpy((void*)bs_va_startaddr, ptr+room, nread - room);
+		MEMCPY((void*)target_addr, ptr, room);
+		MEMCPY((void*)bs_va_startaddr, ptr+room, nread - room);
 
 	}
 	else
 	{
-		memcpy((void*)target_addr, ptr, nread);
+		MEMCPY((void*)target_addr, ptr, nread);
 	}
 
 	vpu_DecUpdateBitstreamBuffer(handle, nread);
@@ -151,7 +151,7 @@ static int decoder_parse(DecodingInstance dec)
 	}
 
 
-	memcpy(&(dec->picCropRect), &(initinfo.picCropRect), sizeof(initinfo.picCropRect));
+	MEMCPY(&(dec->picCropRect), &(initinfo.picCropRect), sizeof(initinfo.picCropRect));
 
 	dec->phy_slicebuf_size = initinfo.worstSliceSize * 1024;
 	dec->stride = dec->picwidth;

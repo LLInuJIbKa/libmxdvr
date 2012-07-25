@@ -60,13 +60,13 @@ static void add_huff_table(j_decompress_ptr dinfo, JHUFF_TBL **htblptr, const UI
 	if(*htblptr == NULL)
 		*htblptr = jpeg_alloc_huff_table((j_common_ptr)dinfo);
 
-	memcpy((*htblptr)->bits, bits, sizeof((*htblptr)->bits));
+	MEMCPY((*htblptr)->bits, bits, sizeof((*htblptr)->bits));
 	nsymbols = 0;
 
 	for(len = 1; len <= 16; len++)
 		nsymbols += bits[len];
 
-	memcpy((*htblptr)->huffval, val, nsymbols * sizeof(UINT8));
+	MEMCPY((*htblptr)->huffval, val, nsymbols * sizeof(UINT8));
 }
 
 static void std_huff_tables(j_decompress_ptr dinfo)

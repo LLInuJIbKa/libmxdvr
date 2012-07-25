@@ -2,7 +2,7 @@
 #include <string.h>
 #include <pthread.h>
 #include "queue.h"
-
+#include "platform.h"
 
 struct queue
 {
@@ -70,7 +70,7 @@ void queue_push(queue q, unsigned char* data)
 
 	index %= q->queue_size;
 
-	memcpy(q->buffers[index], data, q->buffer_size);
+	MEMCPY(q->buffers[index], data, q->buffer_size);
 
 	pthread_mutex_unlock(&q->mutex);
 	q->locked = 0;

@@ -6,6 +6,7 @@
 #include "vpu_lib.h"
 #include "framebuf.h"
 #include "queue.h"
+#include "platform.h"
 #include <stdint.h>
 #include <pthread.h>
 

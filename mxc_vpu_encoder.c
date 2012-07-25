@@ -269,7 +269,7 @@ int vpu_encode_one_frame(EncodingInstance instance, const unsigned char* data)
 
 	yuv_addr = instance->pfbpool[src_fbid]->addrY + instance->pfbpool[src_fbid]->desc.virt_uaddr - instance->pfbpool[src_fbid]->desc.phy_addr;
 
-	memcpy((unsigned char*)yuv_addr, data, instance->input_size);
+	MEMCPY((unsigned char*)yuv_addr, data, instance->input_size);
 
 	pthread_mutex_lock(&vpu_mutex);
 	ret = vpu_EncStartOneFrame(handle, &(instance->enc_param));
@@ -327,7 +327,7 @@ static void convert_yuv422p_to_yuv420p(unsigned char *InBuff, unsigned char *Out
 	unsigned char* out_v;
 
 	/* Write Y plane */
-	memcpy(OutBuff, InBuff, width * height);
+	MEMCPY(OutBuff, InBuff, width * height);
 
 	/* Write UV plane */
 	for(j = 0;j < height / 2; ++j)

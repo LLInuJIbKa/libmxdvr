@@ -1,8 +1,10 @@
-CC=/opt/toolchain/bin/arm-none-linux-gnueabi-gcc 
+CC=/opt/toolchain/bin/arm-none-linux-gnueabi-gcc
+AS=/opt/toolchain/bin/arm-none-linux-gnueabi-as
 ROOTFS:=/media/SmartHome_SD
 TARGET_SHARED_OBJECT:=libmxdvr.so 
 SOURCE_FILES:=v4l2dev.c mxc_vpu.c mxc_vpu_encoder.c mxc_vpu_decoder.c mxc_display.c platform.c font.c framebuf.c queue.c fbclient.c
-OBJECTS:=$(subst .c,.o, $(SOURCE_FILES))
+ASSEMBLY_FILES:=neoncpy.s
+OBJECTS:=$(subst .c,.o, $(SOURCE_FILES)) $(subst .s,.o, $(ASSEMBLY_FILES))
 
 
 INCLUDE_DIRS=\
@@ -27,6 +29,10 @@ clean:
 %.o: %.c
 	@echo "  CC	$@"
 	@$(CC) $(CFLAGS) -c $< -o $@
+
+%.o: %.s
+	@echo "  AS	$@"
+	@$(AS) $< -o $@
 
 $(TARGET_SHARED_OBJECT): $(OBJECTS)
 	@echo "  LD	$@"

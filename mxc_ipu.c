@@ -15,7 +15,7 @@ static int skip_next_frame = 0;
 
 static void ipu_output_callback(void* output, int index)
 {
-	if(output) memcpy(output, global_ipu_handle->outbuf_start[index], global_ipu_handle->ofr_size);
+	if(output) MEMCPY(output, global_ipu_handle->outbuf_start[index], global_ipu_handle->ofr_size);
 }
 
 
@@ -95,7 +95,7 @@ void ipu_buffer_update(ipu_lib_handle_t* ipu_handle, const unsigned char* input_
 	global_ipu_handle= ipu_handle;
 
 	if(!skip_next_frame)
-		memcpy(ipu_handle->inbuf_start[0], input_data, ipu_handle->ifr_size);
+		MEMCPY(ipu_handle->inbuf_start[0], input_data, ipu_handle->ifr_size);
 
 	next_update_index = mxc_ipu_lib_task_buf_update(ipu_handle, 0, 0, 0, ipu_output_callback, output_data);
 
