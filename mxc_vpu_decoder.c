@@ -8,7 +8,7 @@
 #include "mxc_display.h"
 #include "font.h"
 
-#define VPU_DECODING_QUEUE_SIZE	(16)
+#define VPU_DECODING_QUEUE_SIZE	(64)
 
 static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *fill_end_bs)
 {
@@ -49,8 +49,8 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 	if((target_addr + nread) > bs_va_endaddr)
 	{
 		room = bs_va_endaddr - target_addr;
-		MEMCPY((void*)target_addr, ptr, room);
-		MEMCPY((void*)bs_va_startaddr, ptr+room, nread - room);
+		memcpy((void*)target_addr, ptr, room);
+		memcpy((void*)bs_va_startaddr, ptr+room, nread - room);
 
 	}
 	else
@@ -151,7 +151,7 @@ static int decoder_parse(DecodingInstance dec)
 	}
 
 
-	MEMCPY(&(dec->picCropRect), &(initinfo.picCropRect), sizeof(initinfo.picCropRect));
+	memcpy(&(dec->picCropRect), &(initinfo.picCropRect), sizeof(initinfo.picCropRect));
 
 	dec->phy_slicebuf_size = initinfo.worstSliceSize * 1024;
 	dec->stride = dec->picwidth;
@@ -481,7 +481,7 @@ static int vpu_decoding_thread(DecodingInstance dec)
 	while(dec->run_thread)
 	{
 		ret = vpu_decode_one_frame(dec, &frame);
-		if(!frame) continue;
+		if(!frame||ret == -1) continue;
 
 		/* Draw OSD */
 

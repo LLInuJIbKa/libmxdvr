@@ -17,7 +17,7 @@
 #include "platform.h"
 
 #define V4L2DEV_BUFFER_SIZE	(262144)
-#define V4L2DEV_QUEUE_SIZE	(16)
+#define V4L2DEV_QUEUE_SIZE	(64)
 
 
 /**
@@ -331,7 +331,7 @@ int v4l2dev_read(v4l2dev device, unsigned char* output)
 
 #ifdef USE_FMT_MJPG
 
-		MEMCPY(output, device->mmap_buffers[buf.index], buf.bytesused);
+		memcpy(output, device->mmap_buffers[buf.index], buf.bytesused);
 		//jpeg_to_raw(device->mmap_buffers[buf.index], buf.bytesused, device->buffer);
 
 #else
