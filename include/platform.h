@@ -26,14 +26,14 @@ void fb_wakeup(const char* tty_path);
  * @brief Memory copy with NEON instructions
  * @param dest Destination
  * @param src Source
- * @param n Size to copy
+ * @param n Size to copy, n must be aligned to 8 bytes
  */
 void neoncpy(void *dest, const void *src, size_t n);
 
 #ifdef USE_NEONCPY
-#define MEMCPY(x, y, z) neoncpy(x, y, z)
+#define MEMCPY(dest, src, n) neoncpy(dest, src, n)
 #else
-#define MEMCPY(x, y, z) memcpy(x, y, z)
+#define MEMCPY(dest, src, n) memcpy(dest, src, n)
 #endif
 
 #endif /* PLATFORM_H_ */
