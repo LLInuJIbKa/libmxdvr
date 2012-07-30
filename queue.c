@@ -29,7 +29,7 @@ queue queue_new(int buffer_size, int queue_size)
 	ptr->available = queue_size;
 
 
-	ptr->buffers = calloc(queue_size, sizeof(queue));
+	ptr->buffers = calloc(queue_size, sizeof(unsigned char*));
 
 	for(i = 0; i<queue_size; ++i)
 		ptr->buffers[i] = calloc(1, buffer_size);
@@ -100,7 +100,4 @@ int queue_get_buffer_size(queue q)
 {
 	return q->buffer_size;
 }
-
-
-
 
