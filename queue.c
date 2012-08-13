@@ -101,3 +101,9 @@ int queue_get_buffer_size(queue q)
 	return q->buffer_size;
 }
 
+unsigned char* queue_get_first_ptr(queue q)
+{
+	if(!q||q->available == q->queue_size) return NULL;
+	return q->buffers[q->first];
+}
+

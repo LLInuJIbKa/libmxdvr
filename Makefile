@@ -17,11 +17,11 @@ INCLUDE_DIRS=\
 
 LINK_LIBRARIES=-ljpeg -lipu -lvpu $(shell pkg-config --libs pangocairo)
 
-CFLAGS:=-pipe -O3 -fPIC -Wall -march=armv6 -fno-strict-aliasing $(INCLUDE_DIRS)
+CFLAGS:=-pipe -O3 -fPIC -ffast-math -Wall -march=armv6 -fno-strict-aliasing $(INCLUDE_DIRS)
 LDFLAGS:=-Wall -L$(ROOTFS)/usr/lib $(LINK_LIBRARIES) --sysroot=$(ROOTFS) 
 
 
-all: $(TARGET_SHARED_OBJECT) dvrdemo fbdemo
+all: $(TARGET_SHARED_OBJECT) dvrdemo fbdemo rawdemo
 
 clean:
 	rm -f $(TARGET_SHARED_OBJECT) *.o dvrdemo
@@ -45,4 +45,7 @@ dvrdemo: dvrdemo.o $(TARGET_SHARED_OBJECT)
 fbdemo: fbdemo.o $(TARGET_SHARED_OBJECT)
 	@echo "  LD	$@"
 	@$(CC) -L./ $(LDFLAGS) -lmxdvr $< -o $@
-	
+
+rawdemo: rawdemo.o $(TARGET_SHARED_OBJECT)
+	@echo "  LD	$@"
+	@$(CC) -L./ $(LDFLAGS) -lmxdvr $< -o $@

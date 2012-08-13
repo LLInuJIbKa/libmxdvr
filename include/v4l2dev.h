@@ -10,23 +10,20 @@
 #include <linux/videodev2.h>
 #include "queue.h"
 
-/**
- * @brief Use software 422-to-420p conversion.
- * @details Use CPU to do 422-to-420p conversion. <b>It cost a lot of CPU time, but is needed for VPU H.264 encoding.</b><br/><br/>
- * This macro has no effect when USE_YUV422_OUTPUT is defined.
- */
-#define SOFTWARE_YUV422_TO_YUV420
-
-/**
- * @brief Use Motion JPEG as pixel format instead of RAW
- * @details Enable this macro if you wish to support 720p with 25+ fps.
- */
-#define USE_FMT_MJPG
 
 /**
  * @brief Handle object of V4L2 devices
  */
 typedef struct v4l2dev* v4l2dev;
+
+
+enum V4L2_pixelformat
+{
+	RAW,
+	MJPEG,
+	H264
+};
+
 
 /**
  * @brief Open a V4L2 device and return a handle object.
@@ -42,7 +39,7 @@ v4l2dev v4l2dev_open(const char* device_node);
  * @param height
  * @param n_buffers Number of buffers.
  */
-void v4l2dev_init(v4l2dev device, const int width, const int height, const int n_buffers);
+void v4l2dev_init(v4l2dev device, const enum V4L2_pixelformat format, const int width, const int height, const int n_buffers);
 
 /**
  * @brief Close a V4L2 device and free all resource.

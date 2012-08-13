@@ -349,6 +349,36 @@ static void convert_yuv422p_to_yuv420p(unsigned char *InBuff, unsigned char *Out
 	}
 }
 
+static void convert_yuv422_to_yuv420(unsigned char *InBuff, unsigned char *OutBuff, int width, int height)
+{
+	int i, j;
+	unsigned char* in;
+	unsigned char* in2;
+	unsigned char* out;
+	unsigned char* out2;
+
+	/* Write Y plane */
+	for(i = 0;i < width * height; ++i)
+		OutBuff[i] = InBuff[i * 2];
+
+
+	/* Write UV plane */
+	for(j = 0;j < height / 2; ++j)
+	{
+		in = &(InBuff[j * 2 * width * 2]);
+		in2 = &(InBuff[(j * 2 + 1)* width * 2]);
+		out = &(OutBuff[width * height + j * width / 2]);
+		out2 = &(OutBuff[width * height * 5 / 4 + j * width / 2]);
+		for(i = 0;i < width / 2; ++i)
+		{
+			out[i] = (in[i * 4 + 1] + in2[i * 4 + 1]) / 2;
+			out2[i] = (in[i * 4 + 3] + in2[i * 4 + 3]) / 2;
+		}
+
+	}
+
+}
+
 static int vpu_encoding_thread(EncodingInstance instance)
 {
 	unsigned char* frame422 = NULL;
@@ -358,8 +388,10 @@ static int vpu_encoding_thread(EncodingInstance instance)
 	while(instance->run_thread)
 	{
 		while(!(frame422 = queue_pop(instance->input_queue)))
-			usleep(0);
-		convert_yuv422p_to_yuv420p(frame422, frame420, instance->src_picwidth, instance->src_picheight);
+			usleep(1000);
+		//convert_yuv422p_to_yuv420p(frame422, frame420, instance->src_picwidth, instance->src_picheight);
+		convert_yuv422_to_yuv420(frame422, frame420, instance->src_picwidth, instance->src_picheight);
+
 		vpu_encode_one_frame(instance, frame420);
 
 	}

@@ -40,5 +40,7 @@ unsigned char* queue_pop(queue q);
  */
 int queue_get_buffer_size(queue q);
 
+unsigned char* queue_get_first_ptr(queue q);
+
 
 #endif /* QUEUE_H_ */

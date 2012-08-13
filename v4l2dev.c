@@ -16,6 +16,10 @@
 #include "mxc_vpu.h"
 #include "platform.h"
 
+#ifndef V4L2_PIX_FMT_H264
+#define V4L2_PIX_FMT_H264 v4l2_fourcc('H', '2', '6', '4') /* H264 with start codes */
+#endif
+
 #define V4L2DEV_BUFFER_SIZE	(262144)
 #define V4L2DEV_QUEUE_SIZE	(64)
 
@@ -47,52 +51,13 @@ struct v4l2dev
 	/** @brief Current height */
 	int height;
 
-#ifndef USE_YUV422_OUTPUT
-#ifndef	SOFTWARE_YUV422_TO_YUV420
-	/** @brief IPU handle from libipu */
-	ipu_lib_handle_t* ipu_handle;
-#endif
-#endif
+	enum V4L2_pixelformat format;
 	DecodingInstance decoding;
 
-	queue mjpg_queue;
+	queue output_queue;
 	pthread_t thread;
 	int run_thread;
 };
-
-#ifndef USE_FMT_MJPG
-#ifdef SOFTWARE_YUV422_TO_YUV420
-static void convert_yuv422_to_yuv420(unsigned char *InBuff, unsigned char *OutBuff, int width, int height)
-{
-	int i, j;
-	unsigned char* in;
-	unsigned char* in2;
-	unsigned char* out;
-	unsigned char* out2;
-
-	/* Write Y plane */
-	for(i = 0;i < width * height; ++i)
-		OutBuff[i] = InBuff[i * 2];
-
-
-	/* Write UV plane */
-	for(j = 0;j < height / 2; ++j)
-	{
-		in = &(InBuff[j * 2 * width * 2]);
-		in2 = &(InBuff[(j * 2 + 1)* width * 2]);
-		out = &(OutBuff[width * height + j * width / 2]);
-		out2 = &(OutBuff[width * height * 5 / 4 + j * width / 2]);
-		for(i = 0;i < width / 2; ++i)
-		{
-			out[i] = (in[i * 4 + 1] + in2[i * 4 + 1]) / 2;
-			out2[i] = (in[i * 4 + 3] + in2[i * 4 + 3]) / 2;
-		}
-
-	}
-
-}
-#endif
-#endif
 
 static int is_valid_v4l2dev(v4l2dev device)
 {
@@ -135,7 +100,7 @@ v4l2dev v4l2dev_open(const char* device_node)
 	return device;
 }
 
-void v4l2dev_init(v4l2dev device, const int width, const int height, const int n_buffers)
+void v4l2dev_init(v4l2dev device, const enum V4L2_pixelformat format, const int width, const int height, const int n_buffers)
 {
 	int input_index = 0;
 	struct v4l2_format fmt;
@@ -159,11 +124,22 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 	fmt.type		= V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	fmt.fmt.pix.width	= width;
 	fmt.fmt.pix.height	= height;
-#ifdef USE_FMT_MJPG
-	fmt.fmt.pix.pixelformat	= V4L2_PIX_FMT_MJPEG;
-#else
-	fmt.fmt.pix.pixelformat	= V4L2_PIX_FMT_YUYV;
-#endif
+
+
+	switch(format)
+	{
+	case RAW:
+		fmt.fmt.pix.pixelformat	= V4L2_PIX_FMT_YUYV;
+		break;
+	case MJPEG:
+		fmt.fmt.pix.pixelformat	= V4L2_PIX_FMT_MJPEG;
+		break;
+	case H264:
+		fmt.fmt.pix.pixelformat	= V4L2_PIX_FMT_H264;
+		break;
+	}
+
+	device->format = format;
 
 	if(-1 == xioctl(device->fd, VIDIOC_S_FMT, &fmt))
 	{
@@ -203,16 +179,6 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 
 	device->n_valid_buffers = i;
 
-#ifdef USE_FMT_MJPG
-	/* The output pixel format is rgb24 */
-
-	device->buffer = calloc(1, device->width * device->height * 3);
-#else
-	/* The output pixel format is yuv420p */
-
-	device->buffer = calloc(1, device->width * device->height * 3 / 2);
-#endif
-
 	for(i = 0;i < device->n_valid_buffers;i++)
 	{
 		memset(&buf, 0, sizeof(struct v4l2_buffer));
@@ -226,13 +192,6 @@ void v4l2dev_init(v4l2dev device, const int width, const int height, const int n
 
 	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	xioctl(device->fd, VIDIOC_STREAMON, &type);
-
-#ifndef SOFTWARE_YUV422_TO_YUV420
-	/* Setup hardware accelerated YUYV to I420 conversion and IPU display */
-
-	device->ipu_handle = ipu_init(device->width, device->height, IPU_PIX_FMT_YUYV, device->width, device->height, IPU_PIX_FMT_YUV420P, 0);
-#endif
-
 }
 
 void v4l2dev_close(v4l2dev* device)
@@ -260,10 +219,6 @@ void v4l2dev_close(v4l2dev* device)
 			munmap(ptr->mmap_buffers[i], ptr->buffer_size);
 		}
 	}
-
-#ifndef SOFTWARE_YUV422_TO_YUV420
-	ipu_uninit(&(ptr->ipu_handle));
-#endif
 
 	/* Free memory */
 
@@ -329,18 +284,9 @@ int v4l2dev_read(v4l2dev device, unsigned char* output)
 
 		size = buf.bytesused;
 
-#ifdef USE_FMT_MJPG
-
 		memcpy(output, device->mmap_buffers[buf.index], buf.bytesused);
 		//jpeg_to_raw(device->mmap_buffers[buf.index], buf.bytesused, device->buffer);
 
-#else
-#ifdef	SOFTWARE_YUV422_TO_YUV420
-		convert_yuv422_to_yuv420(device->mmap_buffers[buf.index], output, device->width, device->height);
-#else
-		ipu_buffer_update(device->ipu_handle, device->mmap_buffers[buf.index], output);
-#endif
-#endif
 		/* Unlock */
 		result = xioctl(device->fd, VIDIOC_QBUF, &buf);
 
@@ -351,7 +297,7 @@ int v4l2dev_read(v4l2dev device, unsigned char* output)
 
 static int v4l2dev_thread(v4l2dev device)
 {
-	unsigned char* tmp = calloc(1, queue_get_buffer_size(device->mjpg_queue));
+	unsigned char* tmp = calloc(1, queue_get_buffer_size(device->output_queue));
 	int size;
 
 	device->run_thread = 1;
@@ -359,7 +305,7 @@ static int v4l2dev_thread(v4l2dev device)
 	while(device->run_thread)
 	{
 		size = v4l2dev_read(device, tmp);
-		queue_push(device->mjpg_queue, tmp);
+		queue_push(device->output_queue, tmp);
 	}
 
 	free(tmp);
@@ -368,8 +314,11 @@ static int v4l2dev_thread(v4l2dev device)
 
 void v4l2dev_start_enqueuing(v4l2dev device)
 {
-	device->mjpg_queue = queue_new(V4L2DEV_BUFFER_SIZE, V4L2DEV_QUEUE_SIZE);
+	int buffer_size = device->format == MJPEG ? V4L2DEV_BUFFER_SIZE : device->buffer_size;
+
+	device->output_queue = queue_new(buffer_size, V4L2DEV_QUEUE_SIZE);
 	pthread_create(&device->thread, NULL, (void*)v4l2dev_thread, (void**)device);
+
 }
 
 void v4l2dev_stop_enqueuing(v4l2dev device)
@@ -377,10 +326,10 @@ void v4l2dev_stop_enqueuing(v4l2dev device)
 	int ret;
 	device->run_thread = 0;
 	pthread_join(device->thread, (void**)(&ret));
-	queue_delete(&device->mjpg_queue);
+	queue_delete(&device->output_queue);
 }
 
 queue v4l2dev_get_queue(v4l2dev device)
 {
-	return device->mjpg_queue;
+	return device->output_queue;
 }
