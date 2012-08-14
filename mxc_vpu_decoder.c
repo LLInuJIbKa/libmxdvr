@@ -307,7 +307,8 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 
 	while(vpu_IsBusy())
 	{
-		err = fill_bsbuffer(dec, 0, &eos, &fill_end_bs);
+		if(loop_id == 0)
+			err = fill_bsbuffer(dec, 0, &eos, &fill_end_bs);
 
 		if(err < 0)
 		{
