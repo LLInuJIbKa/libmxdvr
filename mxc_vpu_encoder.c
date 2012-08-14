@@ -389,8 +389,8 @@ static int vpu_encoding_thread(EncodingInstance instance)
 	{
 		while(!(frame422 = queue_pop(instance->input_queue)))
 			usleep(1000);
-		//convert_yuv422p_to_yuv420p(frame422, frame420, instance->src_picwidth, instance->src_picheight);
-		convert_yuv422_to_yuv420(frame422, frame420, instance->src_picwidth, instance->src_picheight);
+		convert_yuv422p_to_yuv420p(frame422, frame420, instance->src_picwidth, instance->src_picheight);
+		//convert_yuv422_to_yuv420(frame422, frame420, instance->src_picwidth, instance->src_picheight);
 
 		vpu_encode_one_frame(instance, frame420);
 
