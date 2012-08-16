@@ -33,7 +33,7 @@ void queue_push(queue q, unsigned char* data);
  * @brief Pop data from a queue.
  * @retval Pointer to popped data
  */
-unsigned char* queue_pop(queue q);
+int queue_pop(queue q, unsigned char* output);
 
 /**
  * @brief Query single buffer size.

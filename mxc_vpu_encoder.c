@@ -381,14 +381,14 @@ static void convert_yuv422_to_yuv420(unsigned char *InBuff, unsigned char *OutBu
 
 static int vpu_encoding_thread(EncodingInstance instance)
 {
-	unsigned char* frame422 = NULL;
+	unsigned char* frame422 = calloc(1, queue_get_buffer_size(instance->input_queue));
 	unsigned char* frame420 = calloc(1, instance->input_size);
 
 	instance->run_thread = 1;
 	while(instance->run_thread)
 	{
-		while(!(frame422 = queue_pop(instance->input_queue)))
-			usleep(1000);
+		while(queue_pop(instance->input_queue, frame422) == -1)
+			usleep(0);
 		convert_yuv422p_to_yuv420p(frame422, frame420, instance->src_picwidth, instance->src_picheight);
 		//convert_yuv422_to_yuv420(frame422, frame420, instance->src_picwidth, instance->src_picheight);
 

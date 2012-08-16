@@ -77,23 +77,24 @@ void queue_push(queue q, unsigned char* data)
 
 }
 
-unsigned char* queue_pop(queue q)
+int queue_pop(queue q, unsigned char* output)
 {
 	int index;
 
-	if(!q||q->available == q->queue_size||q->locked) return NULL;
+	if(!q||q->available == q->queue_size||q->locked) return -1;
 
 	pthread_mutex_lock(&q->mutex);
 
 	index = q->first;
-
 	q->first++;
 	q->available++;
-
 	q->first %= q->queue_size;
+	MEMCPY(output, q->buffers[index], q->buffer_size);
+	memset(q->buffers[index], 0, q->buffer_size);
+
 	pthread_mutex_unlock(&q->mutex);
 
-	return q->buffers[index];
+	return 0;
 }
 
 int queue_get_buffer_size(queue q)

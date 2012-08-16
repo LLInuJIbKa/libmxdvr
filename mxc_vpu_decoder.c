@@ -35,10 +35,7 @@ static int fill_bsbuffer(DecodingInstance dec, int defaultsize, int *eos, int *f
 	if(space <= 0)
 		return 0;
 
-
-	while(!(ptr = queue_pop(dec->input_queue)))
-		usleep(0);
-
+	ptr = dec->input_buffer;
 	nread = queue_get_buffer_size(dec->input_queue);
 
 	if(nread>space)
@@ -249,9 +246,14 @@ DecodingInstance vpu_create_decoding_instance_for_v4l2(queue input)
 	dec->phy_bsbuf_addr = dec->mem_desc.phy_addr;
 	dec->virt_bsbuf_addr = dec->mem_desc.virt_uaddr;
 	dec->input_queue = input;
+	dec->input_buffer = calloc(1, queue_get_buffer_size(dec->input_queue));
 
 	decoder_open(dec);
+
+	while(queue_pop(dec->input_queue, dec->input_buffer) == -1)
+		usleep(0);
 	fill_bsbuffer(dec, 1, &eos, &fill_end_bs);
+
 	decoder_parse(dec);
 
 	decoder_allocate_framebuffer(dec);
@@ -286,10 +288,13 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 	int is_waited_int;
 	int loop_id;
 	double frame_id = 0;
-	int disp_clr_index = -1, actual_display_index = -1;
+	int actual_display_index = -1;
 	int decIndex = 0;
 	int err = 0, eos = 0, fill_end_bs = 0, decodefinish = 0;
 	struct vpu_display *disp = dec->disp;
+
+	while(queue_pop(dec->input_queue, dec->input_buffer) == -1)
+		usleep(0);
 
 	vpu_DecGiveCommand(handle, SET_ROTATOR_OUTPUT, (void *)&fb[rotid]);
 	pthread_mutex_lock(&vpu_mutex);
@@ -304,11 +309,9 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 	is_waited_int = 0;
 	loop_id = 0;
 
-
-	while(vpu_IsBusy())
+	if(vpu_IsBusy())
 	{
-		if(loop_id == 0)
-			err = fill_bsbuffer(dec, 0, &eos, &fill_end_bs);
+		err = fill_bsbuffer(dec, 0, &eos, &fill_end_bs);
 
 		if(err < 0)
 		{
@@ -316,22 +319,10 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 			return -1;
 		}
 
-		if(loop_id == 10)
-		{
-			err = vpu_SWReset(handle, 0);
-			return -1;
-		}
-
-		if(!err)
-		{
-			vpu_WaitForInt(500);
-			is_waited_int = 1;
-			loop_id++;
-		}
-	}
-
-	if(!is_waited_int)
 		vpu_WaitForInt(500);
+	}else
+		return -1;
+
 	ret = vpu_DecGetOutputInfo(handle, &outinfo);
 	pthread_mutex_unlock(&vpu_mutex);
 
@@ -340,29 +331,10 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 		outinfo.indexFrameDisplay = rotid;
 	}
 
-	dprintf(4, "frame_id = %d\n", (int)frame_id);
-	if(ret != RETCODE_SUCCESS)
-	{
-		fprintf(stderr, "vpu_DecGetOutputInfo failed Err code is %d\n\tframe_id = %d\n", ret, (int)frame_id);
-		return -1;
-	}
-
 	if(outinfo.decodingSuccess == 0)
 	{
 		fprintf(stderr, "Incomplete finish of decoding process.\n\tframe_id = %d\n", (int)frame_id);
 		*output = NULL;
-		return -1;
-	}
-
-	if(outinfo.notSufficientPsBuffer)
-	{
-		fputs("PS Buffer overflow\n", stderr);
-		return -1;
-	}
-
-	if(outinfo.notSufficientSliceBuffer)
-	{
-		fputs("Slice Buffer overflow\n", stderr);
 		return -1;
 	}
 
@@ -376,15 +348,6 @@ int vpu_decode_one_frame(DecodingInstance dec, unsigned char** output)
 
 	if(decodefinish)
 		return -1;
-
-	if((outinfo.indexFrameDisplay == -3) || (outinfo.indexFrameDisplay == -2))
-	{
-		dprintf(3, "VPU doesn't have picture to be displayed.\n\toutinfo.indexFrameDisplay = %d\n", outinfo.indexFrameDisplay);
-
-		disp_clr_index = outinfo.indexFrameDisplay;
-
-		return 0;
-	}
 
 	actual_display_index = rotid;
 	*output = disp->buffers[actual_display_index]->start;

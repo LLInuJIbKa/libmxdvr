@@ -58,6 +58,8 @@ struct DecodingInstance
 	queue output_queue;
 	int run_thread;
 	int show_timestamp;
+
+	unsigned char* input_buffer;
 };
 
 /**
