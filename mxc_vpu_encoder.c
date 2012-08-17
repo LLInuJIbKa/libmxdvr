@@ -274,7 +274,7 @@ int vpu_encode_one_frame(EncodingInstance instance, const unsigned char* data)
 	pthread_mutex_lock(&vpu_mutex);
 	ret = vpu_EncStartOneFrame(handle, &(instance->enc_param));
 
-	while(vpu_IsBusy())
+	if(vpu_IsBusy())
 	{
 		usleep(0);
 		vpu_WaitForInt(200);
