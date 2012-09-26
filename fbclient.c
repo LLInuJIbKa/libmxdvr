@@ -12,6 +12,7 @@
 
 
 #define BUFFER_SIZE	(262144)
+#define CONNECT_PORT	(5555)
 
 static pthread_t fbclient_pthread;
 static int run;
@@ -40,7 +41,7 @@ int fbclient_thread(int arg)
 	}
 
 	address.sin_family = AF_INET;
-	address.sin_port = htons(5555);
+	address.sin_port = htons(CONNECT_PORT);
 	address.sin_addr.s_addr = inet_addr("127.0.0.1");
 	bzero(&(address.sin_zero), 8);
 
