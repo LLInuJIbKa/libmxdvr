@@ -1,6 +1,9 @@
 /**
  * @file mxc_vpu.h
  * @author Ruei-Yuan Lu (RueiYuan.Lu@gmail.com)
+ * @brief VPU encoding and decoding API
+ * @details
+ * @include dvrdemo.c Demo program
  */
 #ifndef MXC_VPU_H_
 #define MXC_VPU_H_
