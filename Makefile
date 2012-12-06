@@ -24,7 +24,7 @@ LDFLAGS:=-Wall -L$(ROOTFS)/usr/lib $(LINK_LIBRARIES) --sysroot=$(ROOTFS)
 all: $(TARGET_SHARED_OBJECT) dvrdemo fbdemo rawdemo
 
 clean:
-	rm -f $(TARGET_SHARED_OBJECT) *.o dvrdemo
+	rm -f $(TARGET_SHARED_OBJECT) *.o dvrdemo fbdemo rawdemo
 
 %.o: %.c
 	@echo "  CC	$@"
