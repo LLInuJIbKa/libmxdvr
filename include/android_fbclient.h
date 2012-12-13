@@ -18,7 +18,6 @@ void android_fbclient_start(void);
 
 /**
  * @brief Stop framebuffer client thread.
- * @details Set stop flag to make thread exits.
  */
 void android_fbclient_stop(void);
 
@@ -29,19 +28,19 @@ int android_fbclient_is_running(void);
 
 /**
  * @brief Start device prober thread.
- * @details This thread monitors USB events from udev and detects if Android devices are connected or not.
+ * @details This thread monitors USB events from udev and detects if Android
+ * devices are connected or not. Users have to modify <b>android_serial.txt</b>
+ * to filter devices you want.
  */
 void android_prober_start(void);
 
 /**
  * @brief Stop device prober thread.
- * @details Set stop flag to make thread exits.
  */
 void android_prober_stop(void);
 
 /**
  * @brief Report if any device are connected.
- * @details Return true if an Android device is connected.
  */
 int android_is_device_connected(void);
 
