@@ -23,6 +23,11 @@ void android_fbclient_start(void);
 void android_fbclient_stop(void);
 
 /**
+ * @brief Report if fbclient is running or not.
+ */
+int android_fbclient_is_running(void);
+
+/**
  * @brief Start device prober thread.
  * @details This thread monitors USB events from udev and detects if Android devices are connected or not.
  */
@@ -40,6 +45,20 @@ void android_prober_stop(void);
  */
 int android_is_device_connected(void);
 
+/**
+ * @brief Install fbserver into the Android device.
+ */
+void android_fbserver_install(void);
+
+/**
+ * @brief Start fbserver.
+ */
+void android_fbserver_start(void);
+
+/**
+ * @brief Stop fbserver.
+ */
+void android_fbserver_stop(void);
 
 
 #endif /* ANDROID_FBCLIENT_H_ */

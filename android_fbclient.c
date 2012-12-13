@@ -16,6 +16,7 @@
 #define CONNECT_PORT	(5555)
 #define ANDROID_PROBE_INTERVAL	(500)
 #define ANDROID_SERIAL_FILE	"android_serial.txt"
+#define MAX_RETRY_READ_SOCKET	(10)
 
 static pthread_t fbclient_pthread = 0;
 static int fbclient_running = 0;
@@ -32,6 +33,7 @@ static int android_fbclient_thread(int arg)
 	queue input;
 	DecodingInstance instance = NULL;
 	int first = 1;
+	int retry_times = 0;
 
 	input = queue_new(BUFFER_SIZE, 8);
 
@@ -75,6 +77,13 @@ static int android_fbclient_thread(int arg)
 		while(remaining>0)
 		{
 			read_bytes = read(socketfd, &(buffer[jpg_size-remaining]), remaining);
+			if(!read_bytes)
+				++retry_times;
+			else
+				retry_times = 0;
+			if(retry_times > MAX_RETRY_READ_SOCKET)
+				break;
+
 			remaining -= read_bytes;
 		}
 
@@ -92,10 +101,12 @@ static int android_fbclient_thread(int arg)
 	}
 
 	vpu_stop_decoding(instance);
+	vpu_close_decoding_instance(&instance);
 	free(buffer);
+	queue_delete(&input);
 	close(socketfd);
+	fbclient_pthread = 0;
 	fbclient_running = 0;
-
 	return 0;
 }
 
@@ -113,6 +124,11 @@ void android_fbclient_stop(void)
 	fbclient_running = 0;
 	pthread_join(fbclient_pthread, (void**)&ret);
 	fbclient_pthread = 0;
+}
+
+int android_fbclient_is_running(void)
+{
+	return fbclient_running;
 }
 
 
@@ -227,4 +243,34 @@ void android_prober_stop(void)
 int android_is_device_connected(void)
 {
 	return android_device_connected;
+}
+
+void android_fbserver_install(void)
+{
+	system("/root/adb kill-server");
+	android_fbclient_stop();
+	system("/root/adb push /root/Dserver /data/local/tmp/Dserver");
+}
+
+void android_fbserver_start(void)
+{
+	system("/root/adb kill-server");
+	system("/root/adb forward tcp:5555 tcp:12500");
+	android_fbserver_stop();
+	system("/root/adb shell /data/local/tmp/Dserver &");
+}
+
+void android_fbserver_stop(void)
+{
+	FILE* fp = NULL;
+	char pid[10] = {};
+	char cmd[256] = {};
+	fp = popen("./adb shell ps|grep Dserver|awk '{ print $2 }'", "r");
+	fgets(pid, 9, fp);
+	fclose(fp);
+	pid[strlen(pid) - 1] = 0;
+
+	strncat(cmd, "/root/adb shell kill -9 ", 255);
+	strncat(cmd, pid, 255);
+	system(cmd);
 }
