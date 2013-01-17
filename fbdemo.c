@@ -23,8 +23,11 @@ int main(int argc, char **argv)
 
 		fgets(cmd, 255, stdin);
 
-		if(!android_fbclient_is_running())
+		if(!android_fbclient_is_running() && isLaunched)
+		{
+			fputs("Disconnected from device\n", stderr);
 			isLaunched = 0;
+		}
 
 		if(!strcmp(cmd, "start\n"))
 		{
