@@ -62,7 +62,6 @@ struct v4l2dev
 static int is_valid_v4l2dev(v4l2dev device)
 {
 	if(!device) return 0;
-	if(device->fd<0) return 0;
 	if(device->n_valid_buffers<1) return 0;
 	if(!device->mmap_buffers) return 0;
 	return 1;
@@ -86,13 +85,15 @@ static int xioctl (int fd, int request, void* arg)
 v4l2dev v4l2dev_open(const char* device_node)
 {
 	v4l2dev device = NULL;
-	int fd = 0;
+	int fd = -1;
 
 	if(!device_node) return NULL;
 
-	fd = open(device_node, O_RDWR|O_NONBLOCK, 0);
-
-	if(fd == -1) return NULL;
+	if(strcmp(DUMMY_V4L2_DEVICE_PATH, device_node))
+	{
+		fd = open(device_node, O_RDWR|O_NONBLOCK, 0);
+		if(fd == -1) return NULL;
+	}
 
 	device = calloc(1, sizeof(struct v4l2dev));
 	device->fd = fd;
@@ -112,6 +113,13 @@ void v4l2dev_init(v4l2dev device, const enum V4L2_pixelformat format, const int 
 	int i;
 
 	if(!device) return;
+
+	if(device->fd == -1)
+	{
+		device->width	= width;
+		device->height	= height;
+		return;
+	}
 
 	/* Select input 0 */
 
@@ -203,28 +211,31 @@ void v4l2dev_close(v4l2dev* device)
 	if(!device) return;
 	if(!ptr) return;
 
-
-	/* Stop capturing */
-
-	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	xioctl(ptr->fd, VIDIOC_STREAMOFF, &type);
-
-
-	/* Unmap buffers */
-
-	if(ptr->n_valid_buffers)
+	if(ptr->fd >= 0)
 	{
-		for(i = 0;i< ptr->n_valid_buffers;++i)
+		/* Stop capturing */
+
+		type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		xioctl(ptr->fd, VIDIOC_STREAMOFF, &type);
+
+
+		/* Unmap buffers */
+
+		if(ptr->n_valid_buffers)
 		{
-			munmap(ptr->mmap_buffers[i], ptr->buffer_size);
+			for(i = 0;i< ptr->n_valid_buffers;++i)
+			{
+				munmap(ptr->mmap_buffers[i], ptr->buffer_size);
+			}
 		}
+
+		/* Free memory */
+
+		if(ptr->mmap_buffers) free(ptr->mmap_buffers);
+		if(ptr->buffer) free(ptr->buffer);
+		close(ptr->fd);
 	}
 
-	/* Free memory */
-
-	if(ptr->mmap_buffers) free(ptr->mmap_buffers);
-	if(ptr->buffer) free(ptr->buffer);
-	if(ptr->fd >=0) close(ptr->fd);
 	free(ptr);
 	*device = NULL;
 }
@@ -243,6 +254,13 @@ int v4l2dev_read(v4l2dev device, unsigned char* output)
 	int result, size;
 
 	if(!is_valid_v4l2dev(device)) return -1;
+
+	/* Return green screen in yuv420p format if it was a dummy device */
+	if(device->fd == -1)
+	{
+		memset(output, 0, device->width * device->height * 3 / 2);
+		return device->width * device->height * 3 / 2;
+	}
 
 	FD_ZERO(&fds);
 	FD_SET(device->fd, &fds);
