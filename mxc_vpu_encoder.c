@@ -313,6 +313,7 @@ void vpu_close_encoding_instance(EncodingInstance* instance)
 	}
 	IOFreeVirtMem(&(ptr->mem_desc));
 	IOFreePhyMem(&(ptr->mem_desc));
+	close(ptr->fd);
 	free(*instance);
 
 	*instance = NULL;
