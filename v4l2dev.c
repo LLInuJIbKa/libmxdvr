@@ -62,8 +62,6 @@ struct v4l2dev
 static int is_valid_v4l2dev(v4l2dev device)
 {
 	if(!device) return 0;
-	if(device->n_valid_buffers<1) return 0;
-	if(!device->mmap_buffers) return 0;
 	return 1;
 }
 
@@ -118,6 +116,7 @@ void v4l2dev_init(v4l2dev device, const enum V4L2_pixelformat format, const int 
 	{
 		device->width	= width;
 		device->height	= height;
+		device->buffer_size = width * height * 3 / 2;
 		return;
 	}
 
