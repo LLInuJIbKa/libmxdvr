@@ -17,6 +17,7 @@
 typedef struct v4l2dev* v4l2dev;
 
 #define DUMMY_V4L2_DEVICE_PATH	"dummy"
+#define DUMMY_V4L2_DEVICE_FPS	(31)
 
 enum V4L2_pixelformat
 {

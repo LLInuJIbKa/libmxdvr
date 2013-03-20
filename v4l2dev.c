@@ -256,9 +256,11 @@ int v4l2dev_read(v4l2dev device, unsigned char* output)
 	if(!is_valid_v4l2dev(device)) return -1;
 
 	/* Return green screen in yuv420p format if it was a dummy device */
+
 	if(device->fd == -1)
 	{
 		memset(output, 0, device->width * device->height * 3 / 2);
+		usleep(1000000 / DUMMY_V4L2_DEVICE_FPS);
 		return device->width * device->height * 3 / 2;
 	}
 
