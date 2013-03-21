@@ -21,10 +21,10 @@ CFLAGS:=-pipe -O3 -fPIC -ffast-math -Wall -march=armv6 -fno-strict-aliasing $(IN
 LDFLAGS:=-Wall -L$(ROOTFS)/lib -L$(ROOTFS)/usr/lib $(LINK_LIBRARIES) --sysroot=$(ROOTFS) 
 
 
-all: $(TARGET_SHARED_OBJECT) dvrdemo fbdemo rawdemo
+all: $(TARGET_SHARED_OBJECT) dvrdemo fbdemo rawdemo vhud_prototype
 
 clean:
-	rm -f $(TARGET_SHARED_OBJECT) *.o dvrdemo fbdemo rawdemo
+	rm -f $(TARGET_SHARED_OBJECT) *.o dvrdemo fbdemo rawdemo vhud_prototype
 
 %.o: %.c
 	@echo "  CC	$@"
@@ -47,5 +47,9 @@ fbdemo: fbdemo.o $(TARGET_SHARED_OBJECT)
 	@$(CC) -L./ $(LDFLAGS) -lmxdvr $< -o $@
 
 rawdemo: rawdemo.o $(TARGET_SHARED_OBJECT)
+	@echo "  LD	$@"
+	@$(CC) -L./ $(LDFLAGS) -lmxdvr $< -o $@
+
+vhud_prototype: vhud_prototype.o $(TARGET_SHARED_OBJECT)
 	@echo "  LD	$@"
 	@$(CC) -L./ $(LDFLAGS) -lmxdvr $< -o $@
