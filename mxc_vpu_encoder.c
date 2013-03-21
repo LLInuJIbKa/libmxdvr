@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <time.h>
 #include "mxc_defs.h"
 #include "mxc_vpu.h"
 
@@ -382,19 +383,22 @@ static void convert_yuv422_to_yuv420(unsigned char *InBuff, unsigned char *OutBu
 
 static int vpu_encoding_thread(EncodingInstance instance)
 {
-	unsigned char* frame422 = calloc(1, queue_get_buffer_size(instance->input_queue));
+	struct timeval t1, t2;
+	int tv;
 	unsigned char* frame420 = calloc(1, instance->input_size);
 
 	instance->run_thread = 1;
 	while(instance->run_thread)
 	{
-		while(queue_pop(instance->input_queue, frame422) == -1)
+		gettimeofday(&t1, NULL);
+
+		while(queue_pop(instance->input_queue, frame420) == -1)
 			usleep(0);
-		convert_yuv422p_to_yuv420p(frame422, frame420, instance->src_picwidth, instance->src_picheight);
-		//convert_yuv422_to_yuv420(frame422, frame420, instance->src_picwidth, instance->src_picheight);
 
 		vpu_encode_one_frame(instance, frame420);
-
+		gettimeofday(&t2, NULL);
+		tv = (t2.tv_sec - t1.tv_sec) * 1000000 + (t2.tv_usec - t1.tv_usec);
+		fprintf(stderr, "%3.2ffps      \r", 1000000.0 / tv);
 	}
 
 	free(frame420);
