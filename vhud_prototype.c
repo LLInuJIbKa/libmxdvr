@@ -83,12 +83,33 @@ static gboolean kbio_callback(GIOChannel *gio, GIOCondition condition, gpointer 
 		g_main_loop_quit(main_loop);
 		break;
 	case VHUD_CMD_SHOW_PHONE:
-		if(!android_fbclient_is_running() && android_is_device_connected())
+
+		if(!android_is_device_connected())
+		{
+			g_printerr("Device not found\n");
+		}
+
+		if(!android_fbclient_is_running())
+		{
+			android_fbserver_start();
+			g_printerr("fbserver started\n");
+			sleep(1);
 			android_fbclient_start();
+			g_printerr("fbclient started\n");
+		}else
+		{
+			g_printerr("fbclient has already started\n");
+		}
+
+
 		break;
 	case VHUD_CMD_HIDE_PHONE:
+
 		if(android_fbclient_is_running())
 			android_fbclient_stop();
+		else
+			g_printerr("fbclient is not running\n");
+
 		break;
 	case VHUD_CMD_NOOP:
 		break;
@@ -113,6 +134,11 @@ int main(int argc, char **argv)
 	tty_set_cursor_visible(TTY_PATH, FALSE);
 
 
+	/* Initialize glib multithread support, required if glib < 2.32 */
+#ifndef GLIB_VERSION_2_32
+	g_thread_init(NULL);
+#endif
+
 	/* Initialize V4L2 camera */
 
 	camera = v4l2dev_open(DUMMY_V4L2_DEVICE_PATH);
@@ -134,7 +160,7 @@ int main(int argc, char **argv)
 	/* Setup mainloop */
 
 	main_loop = g_main_loop_new(NULL, FALSE);
-	kbio = g_io_channel_unix_new(1);
+	kbio = g_io_channel_unix_new(0);
 	g_io_add_watch(kbio, G_IO_IN|G_IO_HUP, kbio_callback, NULL);
 	g_timeout_add(ARCHIVE_INTERVAL, timer_callback, NULL);
 
